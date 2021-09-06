@@ -1,8 +1,7 @@
-use num_bigint::{BigUint, BigInt, ToBigInt};
-use num_traits::{Zero, One};
-use num::{Integer};
-use rand::Rng;
-
+use num_bigint::BigUint;
+use num_traits::One;
+use crate::math::{FiniteFieldElement, get_random_number};
+use std::fmt;
 
 /// The prime number
 /// 2^256-189 = 115792089237316195423570985008687907853269984665640564039457584007913129639747
@@ -11,48 +10,30 @@ use rand::Rng;
 /// except the 189 largest can be represented.
 pub const MODULUS_ARRAY : [u32; 8] = [u32::MAX-188, u32::MAX,u32::MAX, u32::MAX,u32::MAX, u32::MAX, u32::MAX,u32::MAX];
 
-/// Given a number and a modulus, the function returns the modular inverse.
-pub(crate) fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
-    if modulus == &One::one() {
-        return One::one()
-    }
-    let mut number = number.to_bigint().expect("Modular inverse invoked with a negative nuber.");
-    let mut modulus = modulus.to_bigint().expect("Modular inverse invoked with a negative nuber.");
-    let original_modulus = modulus.clone();
-    let mut x: BigInt = Zero::zero();
-    let mut inverse: BigInt = One::one();
-    while number > One::one() {
-        let (dividend, remainder) = number.div_rem(&modulus);
-        inverse -= dividend * &x;
-        number = remainder;
-        std::mem::swap(&mut number, &mut modulus);
-        std::mem::swap(&mut x, &mut inverse)
-    }
-    if inverse < Zero::zero() {
-        inverse += original_modulus
-    }
-    inverse.to_biguint().expect("Modular inverse invoked with a negative nuber.")
-}
-
-
-pub fn get_random_number(modulus: &BigUint) -> BigUint {
-    let mut gen = rand::thread_rng();
-    let random_bytes = gen.gen::<[u32; 8]>();
-    BigUint::from_slice(&random_bytes).modpow(&One::one(), modulus)
-}
+pub const MODULUS_SIZE_BITS : u32 = 256;
 
 struct Polynomial {
     coefficients: Vec<BigUint>,
     modulus: BigUint
 }
 
+struct SecretShare {
+    index: u32,
+    element: FiniteFieldElement
+}
+
+impl fmt::Display for SecretShare {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}, {}]", self.index, self.element.value)
+    }
+}
+
 impl Polynomial {
 
     fn new(degree: u32, modulus: &BigUint) -> Self {
-        let mut gen = rand::thread_rng();
         let mut coefficients = vec![];
         for _in in 0..=degree {
-            coefficients.push(get_random_number(modulus));
+            coefficients.push(get_random_number(MODULUS_SIZE_BITS, modulus));
         }
         Polynomial {
             coefficients, modulus: modulus.clone()
@@ -75,19 +56,6 @@ impl Polynomial {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    /// The function generates random inputs for the mod_inverse() function and verifies
-    /// that the product with the inverse always yields 1.
-    fn test_modular_inverse() {
-        for _i in 0..10 {
-            let modulus = BigUint::from_slice(&MODULUS_ARRAY);
-            let one = One::one();
-            let num = get_random_number(&modulus);
-            let inverse = modular_inverse(&num, &modulus);
-            assert_eq!((num*inverse).modpow(&one, &modulus), one);
-        }
-    }
 
     #[test]
     /// The function tests the evaluation of a polynomial:
