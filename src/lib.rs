@@ -1,3 +1,7 @@
+/// The math module provides the required finite field operations.
+mod math;
+
+/// The secret_sharing module provides the secret-sharing functionality.
 mod secret_sharing;
 
 /// The function is called to create secret-shared passphrases.
