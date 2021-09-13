@@ -4,8 +4,9 @@ use num::Integer;
 use rand::Rng;
 use rand::distributions::Standard;
 use std::ops::{Add, Sub, Mul, Div};
+use std::cmp::Ordering;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq)]
 pub(crate) struct FiniteFieldElement {
     pub value: BigUint,
     pub modulus: BigUint
@@ -40,7 +41,6 @@ fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
     inverse.to_biguint().expect("Conversion to unsigned big integer failed..")
 }
 
-
 impl FiniteFieldElement {
 
     fn new(value: &BigUint, modulus: &BigUint) -> Self {
@@ -62,6 +62,24 @@ impl FiniteFieldElement {
             value: BigUint::from_slice(&[value]),
             modulus: modulus.clone()
         }
+    }
+}
+
+impl PartialOrd for FiniteFieldElement {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for FiniteFieldElement {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl PartialEq for FiniteFieldElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
     }
 }
 
@@ -121,18 +139,77 @@ impl Div for FiniteFieldElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use harpo::MODULUS_ARRAY;
+    use crate::secret_sharing::MODULUS_ARRAY_256;
 
     #[test]
     /// The function generates random inputs for the mod_inverse() function and verifies
     /// that the product with the inverse always yields 1.
     fn test_modular_inverse() {
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..10 {
-            let modulus = BigUint::from_slice(&MODULUS_ARRAY);
             let one = One::one();
-            let num = get_random_number(&modulus);
+            let num = get_random_number(256, &modulus);
             let inverse = modular_inverse(&num, &modulus);
             assert_eq!((num*inverse).modpow(&one, &modulus), one);
+        }
+    }
+
+    #[test]
+    /// The function tests the addition operation over finite field elements.
+    fn test_finite_field_addition() {
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        for _i in 0..10 {
+            let element_1 = FiniteFieldElement::new_random(256,&modulus);
+            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let mut sum = element_1.value.clone() + element_2.value.clone();
+            if sum >= modulus {
+                sum -= modulus.clone();
+            }
+            assert_eq!((element_1 + element_2).value, sum);
+        }
+    }
+
+    #[test]
+    /// The function tests the subtraction operation over finite field elements.
+    fn test_finite_field_subtraction() {
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        for _i in 0..10 {
+            let element_1 = FiniteFieldElement::new_random(256,&modulus);
+            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let difference = if element_1 >= element_2 {
+                element_1.value.clone() - element_2.value.clone()
+            }else{
+                element_1.value.clone() + modulus.clone() - element_2.value.clone()
+            };
+            assert_eq!((element_1 - element_2).value, difference);
+        }
+    }
+
+    #[test]
+    /// The function tests the multiplication operation over finite field elements.
+    fn test_finite_field_multiplication() {
+        let one = One::one();
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        for _i in 0..10 {
+            let element_1 = FiniteFieldElement::new_random(256,&modulus);
+            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let product = element_1.value.clone() * element_2.value.clone();
+            assert_eq!((element_1 * element_2).value, product.modpow(&one, &modulus));
+        }
+    }
+
+    #[test]
+    /// The function tests the division operation over finite field elements.
+    fn test_finite_field_division() {
+        let one = One::one();
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        for _i in 0..10 {
+            let element_1 = FiniteFieldElement::new_random(256,&modulus);
+            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let element_3 = FiniteFieldElement::new_random(256,&modulus);
+            let term = (element_1.value.clone() * element_2.value.clone() * modular_inverse(&element_3.value, &modulus)).modpow(&one, &modulus);
+            assert_eq!((element_1.clone() * element_2.clone() / element_3.clone()).value, term);
+            assert_eq!((element_1 / element_3 * element_2).value, term);
         }
     }
 }
