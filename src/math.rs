@@ -7,14 +7,21 @@ use std::ops::{Add, Sub, Mul, Div};
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Eq)]
+/// The struct holds a finite field element.
 pub(crate) struct FiniteFieldElement {
+    /// The value in the form of a big unsigned integer.
     pub value: BigUint,
+    /// The modulus in the form of a big unsigned integer.
     pub modulus: BigUint
 }
 
+/// The function returns a random finite field element with the given number of bits.
 pub(crate) fn get_random_number(bits: u32, modulus: &BigUint) -> BigUint {
+    // Determine the required number of 32-byte integers.
     let num_elements = ((bits+31)/32) as usize;
+    // Get the random numbers.
     let random_bytes : Vec<u32> = rand::thread_rng().sample_iter(Standard).take(num_elements).collect();
+    // Construct a big unsigned integer and apply the modulus.
     BigUint::from_slice(&random_bytes).modpow(&One::one(), modulus)
 }
 
@@ -41,23 +48,24 @@ fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
     inverse.to_biguint().expect("Conversion to unsigned big integer failed..")
 }
 
+
 impl FiniteFieldElement {
 
-    fn new(value: &BigUint, modulus: &BigUint) -> Self {
+    pub fn new(value: &BigUint, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: value.clone(),
             modulus: modulus.clone()
         }
     }
 
-    fn new_random(bits: u32, modulus: &BigUint) -> Self {
+    pub fn new_random(bits: u32, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: get_random_number(bits, modulus),
             modulus: modulus.clone()
         }
     }
 
-    fn new_integer(value: u32, modulus: &BigUint) -> Self{
+    pub fn new_integer(value: u32, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: BigUint::from_slice(&[value]),
             modulus: modulus.clone()
