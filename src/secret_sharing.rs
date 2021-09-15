@@ -31,14 +31,13 @@ pub const MODULUS_ARRAY_224 : [u32; 7] = [u32::MAX-62, u32::MAX, u32::MAX, u32::
 /// is used for 256-bit inputs.
 pub const MODULUS_ARRAY_256 : [u32; 8] = [u32::MAX-188, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX, u32::MAX];
 
-struct Polynomial {
-    coefficients: Vec<BigUint>,
-    modulus: BigUint
+struct SecretPolynomial {
+    coefficients: Vec<FiniteFieldElement>,
 }
 
-struct SecretShare {
-    index: u32,
-    element: FiniteFieldElement
+pub(crate) struct SecretShare {
+    pub index: u32,
+    pub element: FiniteFieldElement
 }
 
 impl fmt::Display for SecretShare {
@@ -47,48 +46,115 @@ impl fmt::Display for SecretShare {
     }
 }
 
-impl Polynomial {
+impl SecretPolynomial {
 
     fn new(degree: u32, num_bits: u32, modulus: &BigUint) -> Self {
         let mut coefficients = vec![];
         for _in in 0..=degree {
-            coefficients.push(get_random_number(num_bits, modulus));
+            coefficients.push(FiniteFieldElement::new_random(num_bits, modulus));
         }
-        Polynomial {
-            coefficients, modulus: modulus.clone()
+        SecretPolynomial {
+            coefficients
         }
     }
 
-    fn evaluate(&self, value: &BigUint) -> BigUint {
+    fn evaluate(&self, value: u32) -> FiniteFieldElement {
         let degree = self.coefficients.len()-1;
         let mut result = self.coefficients[degree].clone();
+        let finite_field_value = FiniteFieldElement::new_integer(value, &result.modulus);
         for index in (0..degree).rev() {
-            result = result*value + self.coefficients[index].clone();
-            result = result.modpow(&One::one(), &self.modulus);
+            result = (result * finite_field_value.clone()) + self.coefficients[index].clone();
         }
         result
     }
+
+    pub(crate) fn get_secret_shares(&self, number: u32) -> Vec<SecretShare> {
+        // The shares correspond to the polynomial points
+        // `f(1), f(2), ..., f(number)`.
+        let mut secret_shares = vec![];
+        for index in 1..=number {
+            secret_shares.push(SecretShare { index, element: self.evaluate(index)});
+        }
+        secret_shares
+    }
 }
+
+pub(crate) fn reconstruct_secret(secret_shares: &[SecretShare]) -> FiniteFieldElement {
+    // Get the modulus from the finite field element of the first share:
+    let modulus = &secret_shares[0].element.modulus;
+    // Create the list of indices:
+    let indices : Vec<u32> = secret_shares.iter().map(|share| share.index).collect();
+    let mut secret = FiniteFieldElement::new_integer(0, modulus);
+    // Process each share:
+    for secret_share in secret_shares {
+        let term = secret_share.element.clone();
+        let mut multiply_term = FiniteFieldElement::new_integer(1, modulus);
+        let mut divide_term = FiniteFieldElement::new_integer(1, modulus);
+        let other_indices : Vec<u32> = indices.iter().map(|index| *index).filter(|index| *index != secret_share.index).collect();
+        for index in other_indices {
+            let index_element = FiniteFieldElement::new_integer(index, modulus);
+            let secret_share_index_element = FiniteFieldElement::new_integer(secret_share.index, modulus);
+            multiply_term = multiply_term * index_element.clone();
+            divide_term = divide_term * (index_element - secret_share_index_element.clone());
+        }
+        // Update the secret:
+        secret = secret + (term * multiply_term / divide_term);
+    }
+    secret
+}
+
+
 
 // ******************************** TESTS ********************************
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_traits::Zero;
+    use rand::seq::SliceRandom;
 
     #[test]
-    /// The function tests the evaluation of a polynomial:
+    /// The function tests the evaluation of a secret polynomial:
     fn test_polynomial_evaluation() {
         let modulus = BigUint::from_slice(&[127]);
-        let polynomial = Polynomial::new(2, 7, &modulus);
-        // Evaluate the polynomial at 0:
-        assert_eq!(polynomial.evaluate(&Zero::zero()), polynomial.coefficients[0]);
-        // Evaluate the polynomial at 1 (which should be the sum of coefficients):
-        let mut coefficient_sum : BigUint = Zero::zero();
-        for coefficient in &polynomial.coefficients {
-            coefficient_sum += coefficient;
+        let SecretPolynomial = SecretPolynomial::new(2, 7, &modulus);
+        // Evaluate the secret polynomial at 0:
+        assert_eq!(SecretPolynomial.evaluate(0), SecretPolynomial.coefficients[0]);
+        // Evaluate the secret polynomial at 1 (which should be the sum of coefficients):
+        let mut coefficient_sum : FiniteFieldElement = FiniteFieldElement::new_integer(0, &modulus);
+        for coefficient in &SecretPolynomial.coefficients {
+            coefficient_sum = coefficient_sum + coefficient.clone();
         }
-        assert_eq!(polynomial.evaluate(&One::one()), coefficient_sum.modpow(&One::one(), &modulus));
+        assert_eq!(SecretPolynomial.evaluate(1), coefficient_sum);
+    }
+
+    #[test]
+    /// The function tests the reconstruction of the secret parameter in the polynomial.
+    fn test_working_secret_reconstruction() {
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        let polynomial = SecretPolynomial::new(2, 256, &modulus);
+        println!("Polynomial: {:?}", &polynomial.coefficients);
+        let shares = polynomial.get_secret_shares(5);
+        let indices : Vec<u32> = (1..5).collect();
+        let random_shares : Vec<u32> = indices.choose_multiple(&mut rand::thread_rng(), 3).map(|index| *index).collect();
+        let random_shares : Vec<SecretShare> = shares.into_iter().filter(|share| random_shares.contains(&share.index)).collect();
+        let secret = reconstruct_secret(&random_shares);
+        println!("Constructed secret: {:?}", &secret);
+        assert_eq!(polynomial.coefficients[0], secret);
+    }
+
+    #[test]
+    /// The function enssures that secret cannot be reconstructed when fewer than `degree+1`
+    // shares are combined.
+    fn test_failing_secret_reconstruction() {
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_128);
+        let polynomial = SecretPolynomial::new(2, 128, &modulus);
+        println!("Polynomial: {:?}", &polynomial.coefficients);
+        let shares = polynomial.get_secret_shares(5);
+        let indices : Vec<u32> = (1..5).collect();
+        let random_shares : Vec<u32> = indices.choose_multiple(&mut rand::thread_rng(), 2).map(|index| *index).collect();
+        let random_shares : Vec<SecretShare> = shares.into_iter().filter(|share| random_shares.contains(&share.index)).collect();
+        let secret = reconstruct_secret(&random_shares);
+        println!("Constructed secret: {:?}", &secret);
+        assert_ne!(polynomial.coefficients[0], secret);
     }
 }
