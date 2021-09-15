@@ -1,6 +1,6 @@
 [package]
 name = "harpo"
-version = "0.0.3"
+version = "0.1.0"
 authors = ["Thomas Locher"]
 edition = "2018"
 
