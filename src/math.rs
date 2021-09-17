@@ -83,6 +83,13 @@ impl FiniteFieldElement {
             modulus: modulus.clone(),
         }
     }
+
+    pub fn get_bytes(&self) -> Vec<u8> {
+        let mut bytes: Vec<u8> = vec![0; self.num_bits >> 3];
+        let value_bytes = self.value.to_bytes_le();
+        bytes[..value_bytes.len()].clone_from_slice(&value_bytes[..]);
+        bytes
+    }
 }
 
 impl PartialOrd for FiniteFieldElement {
