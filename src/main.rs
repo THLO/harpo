@@ -1,17 +1,17 @@
 extern crate clap;
+use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use harpo::{create, reconstruct};
-use clap::{Arg, App, ArgGroup, ArgMatches, SubCommand};
 
 /// The subcommand to create secret shares.
-const CREATE_SUBCOMMAND : &str = "create";
+const CREATE_SUBCOMMAND: &str = "create";
 
 /// The subcommand to reconstruct a shared secret.
-const RECONSTRUCT_SUBCOMMAND : &str = "reconstruct";
+const RECONSTRUCT_SUBCOMMAND: &str = "reconstruct";
 
 /// The function parses the command-line arguments.
 fn parse_command_line<'a>() -> ArgMatches<'a> {
     // Extract the version from the Cargo.toml file.
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     // The arguments that the subcommands share are defined first.
 
@@ -30,8 +30,8 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
 
     // The input must be provided in a file or in the terminal.
     let input_group = ArgGroup::with_name("file_interactive")
-            .args(&vec!["file", "interactive"])
-            .required(true);
+        .args(&["file", "interactive"])
+        .required(true);
 
     // The create subcommand.
     let create_subcommand = SubCommand::with_name(CREATE_SUBCOMMAND)
@@ -39,26 +39,28 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .arg(file_argument.clone())
         .arg(interactive_argument.clone())
         .arg(
-            Arg::with_name("no-embedding")  // The embedding of share indices can be turned off.
+            Arg::with_name("no-embedding") // The embedding of share indices can be turned off.
                 .short("N")
                 .long("no-embedding")
                 .help("Stores share identifiers separately")
                 .takes_value(false),
         )
         .arg(
-            Arg::with_name("num-shares")    // The total number of shares.
+            Arg::with_name("num-shares") // The total number of shares.
                 .required(true)
                 .takes_value(true)
                 .short("n")
                 .long("num-shares")
-                .help("Sets the total number of shares to the given value"))
+                .help("Sets the total number of shares to the given value"),
+        )
         .arg(
             Arg::with_name("threshold") // The threshold for reconstruction.
                 .required(true)
                 .takes_value(true)
                 .short("t")
                 .long("threshold")
-                .help("Sets the threshold to the given value"))
+                .help("Sets the threshold to the given value"),
+        )
         .group(input_group.clone());
 
     // The reconstruct subcommand.
@@ -74,14 +76,14 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .author("Thomas Locher")
         .about("A tool to create secret-shared passphrases and reconstruct passphrases.")
         .arg(
-            Arg::with_name("verbose")   // Verbose output can be enabled.
+            Arg::with_name("verbose") // Verbose output can be enabled.
                 .short("v")
                 .long("verbose")
                 .help("Prints verbose output")
                 .takes_value(false),
         )
         .arg(
-            Arg::with_name("word-list")     // A word-list file can be provided.
+            Arg::with_name("word-list") // A word-list file can be provided.
                 .short("w")
                 .long("word-list")
                 .help("Reads the word list from the provided file")
@@ -98,6 +100,6 @@ fn main() {
     match command_line.subcommand_name() {
         Some(RECONSTRUCT_SUBCOMMAND) => create(),
         Some(CREATE_SUBCOMMAND) => reconstruct(),
-        _ => println!("Error: A subcommand must be provided. Use --help to view options.")
+        _ => println!("Error: A subcommand must be provided. Use --help to view options."),
     };
 }

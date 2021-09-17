@@ -1,10 +1,10 @@
-use num_bigint::{BigUint, BigInt, ToBigInt};
-use num_traits::{Zero, One};
 use num::Integer;
-use rand::Rng;
+use num_bigint::{BigInt, BigUint, ToBigInt};
+use num_traits::{One, Zero};
 use rand::distributions::Standard;
-use std::ops::{Add, Sub, Mul, Div};
+use rand::Rng;
 use std::cmp::Ordering;
+use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone, Eq)]
 /// The struct holds a finite field element.
@@ -12,15 +12,18 @@ pub(crate) struct FiniteFieldElement {
     /// The value in the form of a big unsigned integer.
     pub value: BigUint,
     /// The modulus in the form of a big unsigned integer.
-    pub modulus: BigUint
+    pub modulus: BigUint,
 }
 
 /// The function returns a random finite field element with the given number of bits.
 pub(crate) fn get_random_number(bits: u32, modulus: &BigUint) -> BigUint {
     // Determine the required number of 32-byte integers.
-    let num_elements = ((bits+31)/32) as usize;
+    let num_elements = ((bits + 31) / 32) as usize;
     // Get the random numbers.
-    let random_bytes : Vec<u32> = rand::thread_rng().sample_iter(Standard).take(num_elements).collect();
+    let random_bytes: Vec<u32> = rand::thread_rng()
+        .sample_iter(Standard)
+        .take(num_elements)
+        .collect();
     // Construct a big unsigned integer and apply the modulus.
     BigUint::from_slice(&random_bytes).modpow(&One::one(), modulus)
 }
@@ -28,10 +31,14 @@ pub(crate) fn get_random_number(bits: u32, modulus: &BigUint) -> BigUint {
 /// Given a number and a modulus, the function returns the modular inverse.
 fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
     if modulus == &One::one() {
-        return One::one()
+        return One::one();
     }
-    let mut number = number.to_bigint().expect("Conversion to big integer failed.");
-    let mut modulus = modulus.to_bigint().expect("Conversion to big integer failed.");
+    let mut number = number
+        .to_bigint()
+        .expect("Conversion to big integer failed.");
+    let mut modulus = modulus
+        .to_bigint()
+        .expect("Conversion to big integer failed.");
     let original_modulus = modulus.clone();
     let mut x: BigInt = Zero::zero();
     let mut inverse: BigInt = One::one();
@@ -45,30 +52,30 @@ fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
     if inverse < Zero::zero() {
         inverse += original_modulus
     }
-    inverse.to_biguint().expect("Conversion to unsigned big integer failed..")
+    inverse
+        .to_biguint()
+        .expect("Conversion to unsigned big integer failed..")
 }
 
-
 impl FiniteFieldElement {
-
     pub fn new(value: &BigUint, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: value.clone(),
-            modulus: modulus.clone()
+            modulus: modulus.clone(),
         }
     }
 
     pub fn new_random(bits: u32, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: get_random_number(bits, modulus),
-            modulus: modulus.clone()
+            modulus: modulus.clone(),
         }
     }
 
     pub fn new_integer(value: u32, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: BigUint::from_slice(&[value]),
-            modulus: modulus.clone()
+            modulus: modulus.clone(),
         }
     }
 }
@@ -97,7 +104,7 @@ impl Add for FiniteFieldElement {
     fn add(self, other: Self) -> Self {
         Self {
             value: (self.value + other.value).modpow(&One::one(), &self.modulus),
-            modulus: self.modulus.clone()
+            modulus: self.modulus.clone(),
         }
     }
 }
@@ -113,7 +120,7 @@ impl Sub for FiniteFieldElement {
         };
         Self {
             value,
-            modulus: self.modulus.clone()
+            modulus: self.modulus,
         }
     }
 }
@@ -124,7 +131,7 @@ impl Mul for FiniteFieldElement {
     fn mul(self, other: Self) -> Self {
         Self {
             value: (self.value * other.value).modpow(&One::one(), &self.modulus),
-            modulus: self.modulus.clone()
+            modulus: self.modulus.clone(),
         }
     }
 }
@@ -132,6 +139,7 @@ impl Mul for FiniteFieldElement {
 impl Div for FiniteFieldElement {
     type Output = Self;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn div(self, other: Self) -> Self {
         // Get the moduluar inverse of the other element's value.
         // The modulus of "self" is used because the first term defines the modulus of the
@@ -139,7 +147,7 @@ impl Div for FiniteFieldElement {
         let inverse_value = modular_inverse(&other.value, &self.modulus);
         Self {
             value: (self.value * inverse_value).modpow(&One::one(), &self.modulus),
-            modulus: self.modulus.clone()
+            modulus: self.modulus.clone(),
         }
     }
 }
@@ -158,7 +166,7 @@ mod tests {
             let one = One::one();
             let num = get_random_number(256, &modulus);
             let inverse = modular_inverse(&num, &modulus);
-            assert_eq!((num*inverse).modpow(&one, &modulus), one);
+            assert_eq!((num * inverse).modpow(&one, &modulus), one);
         }
     }
 
@@ -167,8 +175,8 @@ mod tests {
     fn test_finite_field_addition() {
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..10 {
-            let element_1 = FiniteFieldElement::new_random(256,&modulus);
-            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let element_1 = FiniteFieldElement::new_random(256, &modulus);
+            let element_2 = FiniteFieldElement::new_random(256, &modulus);
             let mut sum = element_1.value.clone() + element_2.value.clone();
             if sum >= modulus {
                 sum -= modulus.clone();
@@ -182,11 +190,11 @@ mod tests {
     fn test_finite_field_subtraction() {
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..10 {
-            let element_1 = FiniteFieldElement::new_random(256,&modulus);
-            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let element_1 = FiniteFieldElement::new_random(256, &modulus);
+            let element_2 = FiniteFieldElement::new_random(256, &modulus);
             let difference = if element_1 >= element_2 {
                 element_1.value.clone() - element_2.value.clone()
-            }else{
+            } else {
                 element_1.value.clone() + modulus.clone() - element_2.value.clone()
             };
             assert_eq!((element_1 - element_2).value, difference);
@@ -199,10 +207,13 @@ mod tests {
         let one = One::one();
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..10 {
-            let element_1 = FiniteFieldElement::new_random(256,&modulus);
-            let element_2 = FiniteFieldElement::new_random(256,&modulus);
+            let element_1 = FiniteFieldElement::new_random(256, &modulus);
+            let element_2 = FiniteFieldElement::new_random(256, &modulus);
             let product = element_1.value.clone() * element_2.value.clone();
-            assert_eq!((element_1 * element_2).value, product.modpow(&one, &modulus));
+            assert_eq!(
+                (element_1 * element_2).value,
+                product.modpow(&one, &modulus)
+            );
         }
     }
 
@@ -212,11 +223,17 @@ mod tests {
         let one = One::one();
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..10 {
-            let element_1 = FiniteFieldElement::new_random(256,&modulus);
-            let element_2 = FiniteFieldElement::new_random(256,&modulus);
-            let element_3 = FiniteFieldElement::new_random(256,&modulus);
-            let term = (element_1.value.clone() * element_2.value.clone() * modular_inverse(&element_3.value, &modulus)).modpow(&one, &modulus);
-            assert_eq!((element_1.clone() * element_2.clone() / element_3.clone()).value, term);
+            let element_1 = FiniteFieldElement::new_random(256, &modulus);
+            let element_2 = FiniteFieldElement::new_random(256, &modulus);
+            let element_3 = FiniteFieldElement::new_random(256, &modulus);
+            let term = (element_1.value.clone()
+                * element_2.value.clone()
+                * modular_inverse(&element_3.value, &modulus))
+            .modpow(&one, &modulus);
+            assert_eq!(
+                (element_1.clone() * element_2.clone() / element_3.clone()).value,
+                term
+            );
             assert_eq!((element_1 / element_3 * element_2).value, term);
         }
     }
