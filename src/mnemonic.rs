@@ -4,6 +4,7 @@ use crate::secret_sharing::{
 };
 use num_bigint::BigUint;
 use num_traits::Zero;
+use sha2::{Digest, Sha256};
 use std::error::Error;
 
 const NUM_BITS_PER_WORD: usize = 11;
@@ -77,7 +78,7 @@ fn get_number_for_seed_phrase(
 
 fn get_seed_phrase_for_number(number: &FiniteFieldElement, word_list: &[&str]) -> Vec<String> {
     // Get the bytes.
-    let mut bytes = number.value.to_bytes_le();
+    let mut bytes = number.get_bytes();
     // Compute the SHA-256 hash.
     // Append parts of the hash.
     // Turn the bytes back into a big integer.
