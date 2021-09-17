@@ -34,7 +34,10 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
-fn encode_phrase(words: &[&str], word_list: &[&str]) -> Result<FiniteFieldElement, Box<dyn Error>> {
+fn get_number_for_seed_phrase(
+    words: &[&str],
+    word_list: &[&str],
+) -> Result<FiniteFieldElement, Box<dyn Error>> {
     let num_words = words.len();
     if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
         return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
@@ -69,7 +72,19 @@ fn encode_phrase(words: &[&str], word_list: &[&str]) -> Result<FiniteFieldElemen
         _ => return Err("Invalid number of bits of security.".into()),
     };
     // Return the corresponding finite field element.
-    Ok(FiniteFieldElement::new(&number, &modulus))
+    Ok(FiniteFieldElement::new(&number, num_used_bits, &modulus))
+}
+
+fn get_seed_phrase_for_number(number: &FiniteFieldElement, word_list: &[&str]) -> Vec<String> {
+    // Get the bytes.
+    let mut bytes = number.value.to_bytes_le();
+    // Compute the SHA-256 hash.
+    // Append parts of the hash.
+    // Turn the bytes back into a big integer.
+    // Break the integer into indices.
+    // Translate the indices into words.
+    // Return the word list.
+    vec!["Not there yet".to_string()]
 }
 
 fn test_hex_number_passphrase(hex_number: &str, phrase: &str) {
