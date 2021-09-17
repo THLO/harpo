@@ -70,7 +70,7 @@ impl fmt::Display for SecretShare {
 }
 
 impl SecretPolynomial {
-    fn new(degree: u32, num_bits: u32, modulus: &BigUint) -> Self {
+    fn new(degree: usize, num_bits: usize, modulus: &BigUint) -> Self {
         let mut coefficients = vec![];
         for _in in 0..=degree {
             coefficients.push(FiniteFieldElement::new_random(num_bits, modulus));
@@ -142,18 +142,15 @@ mod tests {
     /// The function tests the evaluation of a secret polynomial:
     fn test_polynomial_evaluation() {
         let modulus = BigUint::from_slice(&[127]);
-        let SecretPolynomial = SecretPolynomial::new(2, 7, &modulus);
+        let polynomial = SecretPolynomial::new(2, 7, &modulus);
         // Evaluate the secret polynomial at 0:
-        assert_eq!(
-            SecretPolynomial.evaluate(0),
-            SecretPolynomial.coefficients[0]
-        );
+        assert_eq!(polynomial.evaluate(0), polynomial.coefficients[0]);
         // Evaluate the secret polynomial at 1 (which should be the sum of coefficients):
         let mut coefficient_sum: FiniteFieldElement = FiniteFieldElement::new_integer(0, &modulus);
-        for coefficient in &SecretPolynomial.coefficients {
+        for coefficient in &polynomial.coefficients {
             coefficient_sum = coefficient_sum + coefficient.clone();
         }
-        assert_eq!(SecretPolynomial.evaluate(1), coefficient_sum);
+        assert_eq!(polynomial.evaluate(1), coefficient_sum);
     }
 
     #[test]
