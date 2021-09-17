@@ -28,13 +28,6 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .long("interactive")
         .help("Enters the input interactively");
 
-    // The argument --threshold sets the number of shares required to reconstruct the secret.
-    let threshold_argument = Arg::with_name("threshold")
-        .takes_value(true)
-        .short("t")
-        .long("threshold")
-        .help("Sets the threshold to the given value");
-
     // The input must be provided in a file or in the terminal.
     let input_group = ArgGroup::with_name("file_interactive")
             .args(&vec!["file", "interactive"])
@@ -45,7 +38,13 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .about("Creates secret-shared passphrases")
         .arg(file_argument.clone())
         .arg(interactive_argument.clone())
-        .arg(threshold_argument.clone())
+        .arg(
+            Arg::with_name("no-embedding")  // The embedding of share indices can be turned off.
+                .short("N")
+                .long("no-embedding")
+                .help("Stores share identifiers separately")
+                .takes_value(false),
+        )
         .arg(
             Arg::with_name("num-shares")    // The total number of shares.
                 .required(true)
@@ -53,6 +52,13 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
                 .short("n")
                 .long("num-shares")
                 .help("Sets the total number of shares to the given value"))
+        .arg(
+            Arg::with_name("threshold") // The threshold for reconstruction.
+                .required(true)
+                .takes_value(true)
+                .short("t")
+                .long("threshold")
+                .help("Sets the threshold to the given value"))
         .group(input_group.clone());
 
     // The reconstruct subcommand.
@@ -60,7 +66,6 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .about("Reconstructs a passphrase")
         .arg(file_argument)
         .arg(interactive_argument)
-        .arg(threshold_argument)
         .group(input_group);
 
     // The application including the top-level arguments.
@@ -73,13 +78,6 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
                 .short("v")
                 .long("verbose")
                 .help("Prints verbose output")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("no-embedding")  // The embedding of share indices can be turned off.
-                .short("N")
-                .long("no-embedding")
-                .help("Stores share identifiers separately")
                 .takes_value(false),
         )
         .arg(
