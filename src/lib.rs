@@ -1,6 +1,9 @@
 /// The math module provides the required finite field operations.
 mod math;
 
+// The mnemonic module provides the conversion between seed phrase and number representation.
+mod mnemonic;
+
 /// The secret_sharing module provides the secret-sharing functionality.
 mod secret_sharing;
 
