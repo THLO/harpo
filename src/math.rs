@@ -3,7 +3,7 @@ use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_traits::{One, Zero};
 use rand::distributions::Standard;
 use rand::Rng;
-use std::cmp::Ordering;
+use std::cmp::{max, Ordering};
 use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone, Eq)]
@@ -11,12 +11,14 @@ use std::ops::{Add, Div, Mul, Sub};
 pub(crate) struct FiniteFieldElement {
     /// The value in the form of a big unsigned integer.
     pub value: BigUint,
+    /// The number of bits that are used at most to represent the value.
+    pub num_bits: usize,
     /// The modulus in the form of a big unsigned integer.
     pub modulus: BigUint,
 }
 
 /// The function returns a random finite field element with the given number of bits.
-pub(crate) fn get_random_number(bits: u32, modulus: &BigUint) -> BigUint {
+pub(crate) fn get_random_number(bits: usize, modulus: &BigUint) -> BigUint {
     // Determine the required number of 32-byte integers.
     let num_elements = ((bits + 31) / 32) as usize;
     // Get the random numbers.
@@ -58,16 +60,18 @@ fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
 }
 
 impl FiniteFieldElement {
-    pub fn new(value: &BigUint, modulus: &BigUint) -> Self {
+    pub fn new(value: &BigUint, num_bits: usize, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: value.clone(),
+            num_bits,
             modulus: modulus.clone(),
         }
     }
 
-    pub fn new_random(bits: u32, modulus: &BigUint) -> Self {
+    pub fn new_random(num_bits: usize, modulus: &BigUint) -> Self {
         FiniteFieldElement {
-            value: get_random_number(bits, modulus),
+            value: get_random_number(num_bits, modulus),
+            num_bits,
             modulus: modulus.clone(),
         }
     }
@@ -75,6 +79,7 @@ impl FiniteFieldElement {
     pub fn new_integer(value: u32, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: BigUint::from_slice(&[value]),
+            num_bits: 1,
             modulus: modulus.clone(),
         }
     }
@@ -104,6 +109,7 @@ impl Add for FiniteFieldElement {
     fn add(self, other: Self) -> Self {
         Self {
             value: (self.value + other.value).modpow(&One::one(), &self.modulus),
+            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus.clone(),
         }
     }
@@ -120,6 +126,7 @@ impl Sub for FiniteFieldElement {
         };
         Self {
             value,
+            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus,
         }
     }
@@ -131,6 +138,7 @@ impl Mul for FiniteFieldElement {
     fn mul(self, other: Self) -> Self {
         Self {
             value: (self.value * other.value).modpow(&One::one(), &self.modulus),
+            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus.clone(),
         }
     }
@@ -147,6 +155,7 @@ impl Div for FiniteFieldElement {
         let inverse_value = modular_inverse(&other.value, &self.modulus);
         Self {
             value: (self.value * inverse_value).modpow(&One::one(), &self.modulus),
+            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus.clone(),
         }
     }
