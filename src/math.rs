@@ -1,9 +1,10 @@
+
 use num::Integer;
 use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_traits::{One, Zero};
 use rand::distributions::Standard;
 use rand::Rng;
-use std::cmp::{max, Ordering};
+use std::cmp::Ordering;
 use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone, Eq)]
@@ -11,8 +12,6 @@ use std::ops::{Add, Div, Mul, Sub};
 pub(crate) struct FiniteFieldElement {
     /// The value in the form of a big unsigned integer.
     pub value: BigUint,
-    /// The number of bits that are used at most to represent the value.
-    pub num_bits: usize,
     /// The modulus in the form of a big unsigned integer.
     pub modulus: BigUint,
 }
@@ -60,10 +59,9 @@ fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
 }
 
 impl FiniteFieldElement {
-    pub fn new(value: &BigUint, num_bits: usize, modulus: &BigUint) -> Self {
+    pub fn new(value: &BigUint, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: value.clone(),
-            num_bits,
             modulus: modulus.clone(),
         }
     }
@@ -71,7 +69,6 @@ impl FiniteFieldElement {
     pub fn new_random(num_bits: usize, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: get_random_number(num_bits, modulus),
-            num_bits,
             modulus: modulus.clone(),
         }
     }
@@ -79,15 +76,17 @@ impl FiniteFieldElement {
     pub fn new_integer(value: u32, modulus: &BigUint) -> Self {
         FiniteFieldElement {
             value: BigUint::from_slice(&[value]),
-            num_bits: 1,
             modulus: modulus.clone(),
         }
     }
 
     pub fn get_bytes(&self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = vec![0; self.num_bits >> 3];
+        let mut bytes: Vec<u8> = vec![0; (self.modulus.bits() >> 3) as usize];
         let value_bytes = self.value.to_bytes_le();
+        println!("Value: {:?}", value_bytes);
+        println!("Encoded byte length: {}", value_bytes.len());
         bytes[..value_bytes.len()].clone_from_slice(&value_bytes[..]);
+        println!("Full encoding: {:?}", bytes);
         bytes
     }
 }
@@ -116,7 +115,6 @@ impl Add for FiniteFieldElement {
     fn add(self, other: Self) -> Self {
         Self {
             value: (self.value + other.value).modpow(&One::one(), &self.modulus),
-            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus.clone(),
         }
     }
@@ -133,7 +131,6 @@ impl Sub for FiniteFieldElement {
         };
         Self {
             value,
-            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus,
         }
     }
@@ -145,7 +142,6 @@ impl Mul for FiniteFieldElement {
     fn mul(self, other: Self) -> Self {
         Self {
             value: (self.value * other.value).modpow(&One::one(), &self.modulus),
-            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus.clone(),
         }
     }
@@ -162,7 +158,6 @@ impl Div for FiniteFieldElement {
         let inverse_value = modular_inverse(&other.value, &self.modulus);
         Self {
             value: (self.value * inverse_value).modpow(&One::one(), &self.modulus),
-            num_bits: max(self.num_bits, other.num_bits),
             modulus: self.modulus.clone(),
         }
     }
@@ -251,6 +246,18 @@ mod tests {
                 term
             );
             assert_eq!((element_1 / element_3 * element_2).value, term);
+        }
+    }
+
+    #[test]
+    /// The function ensures that the finite field element is always encoded using
+    /// the correct number of bytes.
+    fn test_correct_byte_length() {
+        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        for _i in 0..10 {
+            let length = rand::thread_rng().gen_range(10..256);
+            let element = FiniteFieldElement::new_random(length, &modulus);
+            assert_eq!(element.get_bytes().len(), 256 >> 3);
         }
     }
 }

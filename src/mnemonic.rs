@@ -73,7 +73,7 @@ fn get_number_for_seed_phrase(
         _ => return Err("Invalid number of bits of security.".into()),
     };
     // Return the corresponding finite field element.
-    Ok(FiniteFieldElement::new(&number, num_used_bits, &modulus))
+    Ok(FiniteFieldElement::new(&number, &modulus))
 }
 
 fn get_seed_phrase_for_number(number: &FiniteFieldElement, word_list: &[&str]) -> Vec<String> {
