@@ -10,17 +10,6 @@ use std::error::Error;
 const NUM_BITS_PER_WORD: usize = 11;
 const ENTROPY_INCREMENT: usize = 32;
 
-fn decode_hex(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-    if input.len() % 2 != 0 {
-        Err("Error decoding hex string: The input length is odd".into())
-    } else {
-        (0..input.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&input[i..i + 2], 16).map_err(|e| e.into()))
-            .collect()
-    }
-}
-
 fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     let mut left = 0;
     let mut right = word_list.len() - 1;
@@ -59,7 +48,7 @@ fn get_number_for_seed_phrase(
     // Apply the mask to the last index:
     index_list[num_words - 1] &= mask;
     // Compose the finite field element:
-    let mut number = Zero::zero();
+    let mut number: BigUint = Zero::zero();
     for index in (0..num_words).rev() {
         number = (number << NUM_BITS_PER_WORD) + index_list[index];
     }
@@ -73,10 +62,13 @@ fn get_number_for_seed_phrase(
         _ => return Err("Invalid number of bits of security.".into()),
     };
     // Return the corresponding finite field element.
-    Ok(FiniteFieldElement::new(&number, &modulus))
+    Ok(FiniteFieldElement::new(&number.to_bytes_le(), &modulus))
 }
 
-fn get_seed_phrase_for_number(number: &FiniteFieldElement, word_list: &[&str]) -> Result<Vec<String>, Box<dyn Error>> {
+fn get_seed_phrase_for_number(
+    number: &FiniteFieldElement,
+    word_list: &[&str],
+) -> Result<Vec<String>, Box<dyn Error>> {
     // Get the bytes.
     let mut bytes = number.get_bytes();
     // Compute the SHA-256 hash.
@@ -87,7 +79,7 @@ fn get_seed_phrase_for_number(number: &FiniteFieldElement, word_list: &[&str]) -
     let num_words = ((bytes.len() << 3) + NUM_BITS_PER_WORD - 1) / NUM_BITS_PER_WORD;
     let total_num_bits = num_words * NUM_BITS_PER_WORD;
     // Prepare the byte array for the words.
-    let mut encoded_words = vec![0 ; (total_num_bits+7) >> 3];
+    let mut encoded_words = vec![0; (total_num_bits + 7) >> 3];
     // Copy the number into the encoded words array.
     encoded_words[..bytes.len()].clone_from_slice(&bytes[..]);
     // Append a single byte of the hash. This is sufficient as the checksum length is
@@ -96,13 +88,16 @@ fn get_seed_phrase_for_number(number: &FiniteFieldElement, word_list: &[&str]) -
     // Retrieve the indices from the given byte array.
     let indices = get_indices_from_bytes(&encoded_words, num_words)?;
     // Turn the indices into words.
-    let words : Vec<String> = indices.iter().map(|index| word_list[*index].to_string()).collect();
+    let words: Vec<String> = indices
+        .iter()
+        .map(|index| word_list[*index].to_string())
+        .collect();
     // Return the words.
     Ok(words)
 }
 
 fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, Box<dyn Error>> {
-    let mut current_index : usize = 0;
+    let mut current_index: usize = 0;
     let mut read_bits = 0;
     let mut indices = vec![];
     for byte in bytes {
@@ -126,13 +121,21 @@ fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, 
     Err("Error parsing indices from byte array.".into())
 }
 
-fn test_hex_number_passphrase(hex_number: &str, phrase: &str) {
-    let _bytes = decode_hex(hex_number).unwrap();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::word_list::DEFAULT_WORD_LIST;
+
+    fn decode_hex_bytes(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+        if input.len() % 2 != 0 {
+            Err("Error decoding hex string: The input length is not a multiple of 2.".into())
+        } else {
+            (0..input.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&input[i..i + 2], 16).map_err(|e| e.into()))
+                .collect()
+        }
+    }
 
     #[test]
     /// 01101011 10001011 01011101 11010010 10010110 00101101
@@ -144,16 +147,32 @@ mod tests {
     /// 1832 1708 1757 1330 875
     fn test_indices_from_bytes() {
         let num_words = 4;
-        let bytes : &[u8] = &[107, 139, 93, 210, 150, 45];
+        let bytes: &[u8] = &[107, 139, 93, 210, 150, 45];
         let indices = get_indices_from_bytes(bytes, num_words).unwrap();
-        let expected_indices : Vec<usize> =  vec![860, 727, 933, 354];
+        let expected_indices: Vec<usize> = vec![860, 727, 933, 354];
         assert_eq!(indices, expected_indices);
 
         let num_words = 5;
-        let bytes : &[u8] = &[229, 26, 179, 110, 211, 38, 214];
+        let bytes: &[u8] = &[229, 26, 179, 110, 211, 38, 214];
         let indices = get_indices_from_bytes(bytes, num_words).unwrap();
-        let expected_indices : Vec<usize> =  vec![1832, 1708, 1757, 1330, 875];
+        let expected_indices: Vec<usize> = vec![1832, 1708, 1757, 1330, 875];
         assert_eq!(indices, expected_indices);
+    }
+
+    fn test_seed_phrase_from_number(hex_number: &str, phrase: &str) {
+        let mut value = decode_hex_bytes(hex_number).unwrap();
+        let modulus = match value.len() {
+            16 => BigUint::from_slice(&MODULUS_ARRAY_128),
+            20 => BigUint::from_slice(&MODULUS_ARRAY_160),
+            24 => BigUint::from_slice(&MODULUS_ARRAY_192),
+            28 => BigUint::from_slice(&MODULUS_ARRAY_224),
+            32 => BigUint::from_slice(&MODULUS_ARRAY_256),
+            len => panic!("Invalid bit length in test: {}", len << 3),
+        };
+        let element = FiniteFieldElement::new(&value, &modulus);
+        let word_list = get_seed_phrase_for_number(&element, &DEFAULT_WORD_LIST).unwrap();
+        let target_list: Vec<_> = phrase.split(' ').collect();
+        assert_eq!(word_list, target_list);
     }
 
     macro_rules! tests {
@@ -161,7 +180,7 @@ mod tests {
             #[test]
             fn test_mnemonics() {
                 $(
-                    test_hex_number_passphrase($hex_number, $phrase);
+                    test_seed_phrase_from_number($hex_number, $phrase);
                 )*
             }
         };
@@ -266,5 +285,4 @@ mod tests {
             "void come effort suffer camp survey warrior heavy shoot primary clutch crush open amazing screen patrol group space point ten exist slush involve unfold"
         ]
     }
-
 }
