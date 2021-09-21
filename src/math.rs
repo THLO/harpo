@@ -1,4 +1,3 @@
-
 use num::Integer;
 use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_traits::{One, Zero};
@@ -6,15 +5,6 @@ use rand::distributions::Standard;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::ops::{Add, Div, Mul, Sub};
-
-#[derive(Debug, Clone, Eq)]
-/// The struct holds a finite field element.
-pub(crate) struct FiniteFieldElement {
-    /// The value in the form of a big unsigned integer.
-    pub value: BigUint,
-    /// The modulus in the form of a big unsigned integer.
-    pub modulus: BigUint,
-}
 
 /// The function returns a random finite field element with the given number of bits.
 pub(crate) fn get_random_number(bits: usize, modulus: &BigUint) -> BigUint {
@@ -58,10 +48,34 @@ fn modular_inverse(number: &BigUint, modulus: &BigUint) -> BigUint {
         .expect("Conversion to unsigned big integer failed..")
 }
 
+#[derive(Debug, Clone, Eq)]
+/// The struct holds a finite field element.
+pub(crate) struct FiniteFieldElement {
+    /// The value in the form of a big unsigned integer.
+    pub value: BigUint,
+    /// The modulus in the form of a big unsigned integer.
+    pub modulus: BigUint,
+}
+
 impl FiniteFieldElement {
-    pub fn new(value: &BigUint, modulus: &BigUint) -> Self {
+    pub fn new(bytes: &[u8], modulus: &BigUint) -> Self {
+        let mut copied_bytes = vec![0; bytes.len()];
+        // The bytes in each unsigned integer must be reversed before
+        // building the big integer that is stored in the finite field element
+        // in order to be BIP-0039 compliant.
+        for index in (0..(bytes.len() >> 2)).step_by(4) {
+            copied_bytes[index] = bytes[index + 3];
+            copied_bytes[index + 3] = bytes[index];
+            copied_bytes[index + 1] = bytes[index + 2];
+            copied_bytes[index + 2] = bytes[index + 1];
+        }
+        // Build up the big integer.
+        let mut value = Zero::zero();
+        for index in (0..bytes.len()).rev() {
+            value = (value << 8) + bytes[index];
+        }
         FiniteFieldElement {
-            value: value.clone(),
+            value,
             modulus: modulus.clone(),
         }
     }
@@ -83,10 +97,7 @@ impl FiniteFieldElement {
     pub fn get_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = vec![0; (self.modulus.bits() >> 3) as usize];
         let value_bytes = self.value.to_bytes_le();
-        println!("Value: {:?}", value_bytes);
-        println!("Encoded byte length: {}", value_bytes.len());
         bytes[..value_bytes.len()].clone_from_slice(&value_bytes[..]);
-        println!("Full encoding: {:?}", bytes);
         bytes
     }
 }
