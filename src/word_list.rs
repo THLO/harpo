@@ -1,4 +1,4 @@
-const DEFAULT_WORD_LIST: &[&str] = &[
+pub const DEFAULT_WORD_LIST: &[&str] = &[
     "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd",
     "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire",
     "across", "act", "action", "actor", "actress", "actual", "adapt", "add", "addict", "address",
