@@ -59,23 +59,15 @@ pub(crate) struct FiniteFieldElement {
 
 impl FiniteFieldElement {
     pub fn new(bytes: &[u8], modulus: &BigUint) -> Self {
-        let mut copied_bytes = vec![0; bytes.len()];
-        // The bytes in each unsigned integer must be reversed before
-        // building the big integer that is stored in the finite field element
-        // in order to be BIP-0039 compliant.
-        for index in (0..(bytes.len() >> 2)).step_by(4) {
-            copied_bytes[index] = bytes[index + 3];
-            copied_bytes[index + 3] = bytes[index];
-            copied_bytes[index + 1] = bytes[index + 2];
-            copied_bytes[index + 2] = bytes[index + 1];
-        }
-        // Build up the big integer.
-        let mut value = Zero::zero();
-        for index in (0..bytes.len()).rev() {
-            value = (value << 8) + bytes[index];
+        let mut integers : Vec<u32> = vec![0; bytes.len() >> 2];
+        for index in (0..(bytes.len() >> 2)) {
+            integers[index] = (bytes[4*index] as u32)
+                + ((bytes[4*index + 1] as u32) << 8)
+                + ((bytes[4*index + 2] as u32) << 16)
+                + ((bytes[4*index + 3] as u32) << 24)
         }
         FiniteFieldElement {
-            value,
+            value: BigUint::from_slice(&integers),
             modulus: modulus.clone(),
         }
     }
