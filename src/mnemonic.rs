@@ -24,7 +24,7 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
-fn get_number_for_seed_phrase(
+fn get_element_for_mnemonic_code(
     words: &[&str],
     word_list: &[&str],
 ) -> Result<FiniteFieldElement, Box<dyn Error>> {
@@ -39,38 +39,37 @@ fn get_number_for_seed_phrase(
             get_index(word, word_list).expect("A word is used that is not in the word list.")
         })
         .collect();
-    // The number of bits that are ignored:
+    println!("Index list: {:?}", index_list);
+    // The number of bits that are ignored.
     let num_ignored_bits = (num_words * NUM_BITS_PER_WORD) % ENTROPY_INCREMENT;
-    // The number of used bits:
-    let num_used_bits = NUM_BITS_PER_WORD - num_ignored_bits;
-    // The mask that is applied to the last index:
-    let mask = (1 << num_used_bits) - 1;
-    // Apply the mask to the last index:
-    index_list[num_words - 1] &= mask;
+    // Mask the ignored bits.
+    let old_entry = index_list[num_words - 1];
+    index_list[num_words - 1] = (old_entry >> num_ignored_bits) << num_ignored_bits;
+    println!("Updated index list: {:?}", index_list);
     // Compose the finite field element:
     let mut number: BigUint = Zero::zero();
     for index in (0..num_words).rev() {
         number = (number << NUM_BITS_PER_WORD) + index_list[index];
     }
     // Get the modulus.
-    let modulus = match num_used_bits {
-        128 => BigUint::from_slice(&MODULUS_ARRAY_128),
-        160 => BigUint::from_slice(&MODULUS_ARRAY_160),
-        192 => BigUint::from_slice(&MODULUS_ARRAY_192),
-        224 => BigUint::from_slice(&MODULUS_ARRAY_224),
-        256 => BigUint::from_slice(&MODULUS_ARRAY_256),
+    let modulus = match num_words {
+        12 => BigUint::from_slice(&MODULUS_ARRAY_128),
+        15 => BigUint::from_slice(&MODULUS_ARRAY_160),
+        18 => BigUint::from_slice(&MODULUS_ARRAY_192),
+        21 => BigUint::from_slice(&MODULUS_ARRAY_224),
+        24 => BigUint::from_slice(&MODULUS_ARRAY_256),
         _ => return Err("Invalid number of bits of security.".into()),
     };
     // Return the corresponding finite field element.
     Ok(FiniteFieldElement::new(&number.to_bytes_le(), &modulus))
 }
 
-fn get_seed_phrase_for_number(
+fn get_mnemonic_code_for_element(
     number: &FiniteFieldElement,
     word_list: &[&str],
 ) -> Result<Vec<String>, Box<dyn Error>> {
     // Get the bytes.
-    let mut bytes = number.get_bytes();
+    let bytes = number.get_bytes();
     // Compute the SHA-256 hash.
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
@@ -159,8 +158,12 @@ mod tests {
         assert_eq!(indices, expected_indices);
     }
 
-    fn test_seed_phrase_from_number(hex_number: &str, phrase: &str) {
-        let mut value = decode_hex_bytes(hex_number).unwrap();
+    /// This function tests the conversion from a byte array to a mnemonic code
+    /// and vice versa.
+    fn test_mnemonic_code_conversion(hex_number: &str, phrase: &str) {
+        // Obtain the bytes from the hexadecimal encoding.
+        let value = decode_hex_bytes(hex_number).unwrap();
+        // Derive the correct modulus from the size of the byte array.
         let modulus = match value.len() {
             16 => BigUint::from_slice(&MODULUS_ARRAY_128),
             20 => BigUint::from_slice(&MODULUS_ARRAY_160),
@@ -169,10 +172,19 @@ mod tests {
             32 => BigUint::from_slice(&MODULUS_ARRAY_256),
             len => panic!("Invalid bit length in test: {}", len << 3),
         };
+        // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
-        let word_list = get_seed_phrase_for_number(&element, &DEFAULT_WORD_LIST).unwrap();
+        // Get the word list for the element.
+        let word_list = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
         let target_list: Vec<_> = phrase.split(' ').collect();
+        // Assert that the word list corresponds to the list in the test vector.
         assert_eq!(word_list, target_list);
+        println!("Real element: {:?}", element);
+        println!("Target words: {:?}", target_list);
+        // Get the element for the word list.
+        let derived_element = get_element_for_mnemonic_code(&target_list, &DEFAULT_WORD_LIST).unwrap();
+        // Assert that the derived element equals the decoded element.
+        assert_eq!(derived_element, element);
     }
 
     macro_rules! tests {
@@ -180,13 +192,14 @@ mod tests {
             #[test]
             fn test_mnemonics() {
                 $(
-                    test_seed_phrase_from_number($hex_number, $phrase);
+                    test_mnemonic_code_conversion($hex_number, $phrase);
                 )*
             }
         };
     }
 
     tests! {
+        // The mnemonic test vectors have been copied from this URL:
         // https://github.com/trezor/python-mnemonic/blob/master/vectors.json
         [
             "00000000000000000000000000000000",
