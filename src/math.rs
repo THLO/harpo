@@ -59,12 +59,12 @@ pub(crate) struct FiniteFieldElement {
 
 impl FiniteFieldElement {
     pub fn new(bytes: &[u8], modulus: &BigUint) -> Self {
-        let mut integers : Vec<u32> = vec![0; bytes.len() >> 2];
-        for index in (0..(bytes.len() >> 2)) {
-            integers[index] = (bytes[4*index] as u32)
-                + ((bytes[4*index + 1] as u32) << 8)
-                + ((bytes[4*index + 2] as u32) << 16)
-                + ((bytes[4*index + 3] as u32) << 24)
+        let mut integers: Vec<u32> = vec![0; bytes.len() >> 2];
+        for index in 0..(bytes.len() >> 2) {
+            integers[index] = (bytes[4 * index] as u32)
+                + ((bytes[4 * index + 1] as u32) << 8)
+                + ((bytes[4 * index + 2] as u32) << 16)
+                + ((bytes[4 * index + 3] as u32) << 24)
         }
         FiniteFieldElement {
             value: BigUint::from_slice(&integers),
