@@ -54,6 +54,28 @@ pub const MODULUS_ARRAY_256: [u32; 8] = [
     u32::MAX,
 ];
 
+pub(crate) fn get_modulus_for_bits(num_bits: usize) -> Option<BigUint> {
+    match num_bits {
+        128 => Some(BigUint::from_slice(&MODULUS_ARRAY_128)),
+        160 => Some(BigUint::from_slice(&MODULUS_ARRAY_160)),
+        192 => Some(BigUint::from_slice(&MODULUS_ARRAY_192)),
+        224 => Some(BigUint::from_slice(&MODULUS_ARRAY_224)),
+        256 => Some(BigUint::from_slice(&MODULUS_ARRAY_256)),
+        _ => None,
+    }
+}
+
+pub(crate) fn get_modulus_for_words(num_words: usize) -> Option<BigUint> {
+    match num_words {
+        12 => Some(BigUint::from_slice(&MODULUS_ARRAY_128)),
+        15 => Some(BigUint::from_slice(&MODULUS_ARRAY_160)),
+        18 => Some(BigUint::from_slice(&MODULUS_ARRAY_192)),
+        21 => Some(BigUint::from_slice(&MODULUS_ARRAY_224)),
+        24 => Some(BigUint::from_slice(&MODULUS_ARRAY_256)),
+        _ => None,
+    }
+}
+
 struct SecretPolynomial {
     coefficients: Vec<FiniteFieldElement>,
 }
@@ -156,7 +178,7 @@ mod tests {
     #[test]
     /// The function tests the reconstruction of the secret parameter in the polynomial.
     fn test_working_secret_reconstruction() {
-        let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        let modulus = get_modulus_for_bits(256).unwrap();
         let polynomial = SecretPolynomial::new(2, 256, &modulus);
         println!("Polynomial: {:?}", &polynomial.coefficients);
         let shares = polynomial.get_secret_shares(5);
@@ -178,7 +200,7 @@ mod tests {
     /// The function enssures that secret cannot be reconstructed when fewer than `degree+1`
     // shares are combined.
     fn test_failing_secret_reconstruction() {
-        let modulus = BigUint::from_slice(&MODULUS_ARRAY_128);
+        let modulus = get_modulus_for_bits(128).unwrap();
         let polynomial = SecretPolynomial::new(2, 128, &modulus);
         println!("Polynomial: {:?}", &polynomial.coefficients);
         let shares = polynomial.get_secret_shares(5);
