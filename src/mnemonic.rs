@@ -1,14 +1,18 @@
 use crate::math::FiniteFieldElement;
 use crate::secret_sharing::{
-    MODULUS_ARRAY_128, MODULUS_ARRAY_160, MODULUS_ARRAY_192, MODULUS_ARRAY_224, MODULUS_ARRAY_256,
+    get_modulus_for_bits, get_modulus_for_words, MODULUS_ARRAY_128, MODULUS_ARRAY_160,
+    MODULUS_ARRAY_192, MODULUS_ARRAY_224, MODULUS_ARRAY_256,
 };
 use num_bigint::BigUint;
-use num_traits::Zero;
 use sha2::{Digest, Sha256};
+use std::cmp;
 use std::error::Error;
 
+const NUM_VALID_KEY_SIZES: usize = 5;
 const NUM_BITS_PER_WORD: usize = 11;
 const ENTROPY_INCREMENT: usize = 32;
+
+const NUM_TEST_RUNS: usize = 1000;
 
 fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     let mut left = 0;
@@ -39,29 +43,63 @@ fn get_element_for_mnemonic_code(
             get_index(word, word_list).expect("A word is used that is not in the word list.")
         })
         .collect();
-    println!("Index list: {:?}", index_list);
-    // The number of bits that are ignored.
-    let num_ignored_bits = (num_words * NUM_BITS_PER_WORD) % ENTROPY_INCREMENT;
-    // Mask the ignored bits.
-    let old_entry = index_list[num_words - 1];
-    index_list[num_words - 1] = (old_entry >> num_ignored_bits) << num_ignored_bits;
-    println!("Updated index list: {:?}", index_list);
-    // Compose the finite field element:
-    let mut number: BigUint = Zero::zero();
-    for index in (0..num_words).rev() {
-        number = (number << NUM_BITS_PER_WORD) + index_list[index];
-    }
-    // Get the modulus.
-    let modulus = match num_words {
-        12 => BigUint::from_slice(&MODULUS_ARRAY_128),
-        15 => BigUint::from_slice(&MODULUS_ARRAY_160),
-        18 => BigUint::from_slice(&MODULUS_ARRAY_192),
-        21 => BigUint::from_slice(&MODULUS_ARRAY_224),
-        24 => BigUint::from_slice(&MODULUS_ARRAY_256),
-        _ => return Err("Invalid number of bits of security.".into()),
-    };
+    // Convert the indices into a byte array.
+    let bytes = get_bytes_from_indices(&index_list);
+    // The number of bytes used to build the element is a multiple of 32 bit = 4 bytes.
+    let num_used_bytes = (bytes.len() >> 2) << 2;
+    // Copy the bytes into a new array.
+    let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
+    used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
+    // Get the modulus. Calling unwrap() is okay here
+    // because the number of words was checked before.
+    let modulus = get_modulus_for_words(num_words).unwrap();
     // Return the corresponding finite field element.
-    Ok(FiniteFieldElement::new(&number.to_bytes_le(), &modulus))
+    Ok(FiniteFieldElement::new(&used_bytes, &modulus))
+}
+
+fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
+    // Round the number of bytes up so that there is space for all indices.
+    let size = (indices.len() * NUM_BITS_PER_WORD + 7) / 8;
+    // Thhe bytes are written into this byte array.
+    let mut bytes: Vec<u8> = vec![0; size];
+    // The number of used bits in the current byte.
+    let mut num_used_bits = 0;
+    // The index of the currrent byte.
+    let mut current_index = 0;
+    // Iterate over all indices.
+    for index in indices {
+        // Determine the number of bits spread over two or three bytes.
+        let num_bits_first_byte = 8 - num_used_bits;
+        let num_bits_second_byte = cmp::min(8, 11 - num_bits_first_byte);
+        let num_bits_third_byte = cmp::max(0, 11 - num_bits_first_byte - num_bits_second_byte);
+        // Compute the part for the first byte.
+        let first_byte_part = (index >> (11 - num_bits_first_byte)) as u8;
+        bytes[current_index] += first_byte_part;
+        current_index += 1;
+        // Compute the part for the second byte.
+        let second_byte_part = ((index >> num_bits_third_byte) % (1 << num_bits_second_byte)) as u8;
+        bytes[current_index] = second_byte_part << (8 - num_bits_second_byte);
+        // Check if there are remaining bits for the third byte.
+        if num_bits_third_byte > 0 {
+            current_index += 1;
+            // The third part consists of the `num_bits_third_byte` lowest-order bits.
+            let third_byte_part = (index % (1 << num_bits_third_byte)) as u8;
+            // These bits are placed in the highest-order positions.
+            bytes[current_index] = third_byte_part << (8 - num_bits_third_byte);
+            num_used_bits = num_bits_third_byte;
+        } else if num_bits_second_byte == 8 {
+            // If the index fits into two bytes, consuming all bits of the second byte,
+            // the index is increased as the byte is full.
+            current_index += 1;
+            num_used_bits = 0;
+        } else {
+            // Otherwse, the number of used bits is the number of bits written to the
+            // second byte.
+            num_used_bits = num_bits_second_byte;
+        }
+    }
+    // Return the byte array.
+    bytes
 }
 
 fn get_mnemonic_code_for_element(
@@ -124,6 +162,7 @@ fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, 
 mod tests {
     use super::*;
     use crate::word_list::DEFAULT_WORD_LIST;
+    use rand::{seq::SliceRandom, Rng};
 
     fn decode_hex_bytes(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         if input.len() % 2 != 0 {
@@ -160,18 +199,11 @@ mod tests {
 
     /// This function tests the conversion from a byte array to a mnemonic code
     /// and vice versa.
-    fn test_mnemonic_code_conversion(hex_number: &str, phrase: &str) {
+    fn test_mnemonic_code_conversion_vector(hex_number: &str, phrase: &str) {
         // Obtain the bytes from the hexadecimal encoding.
         let value = decode_hex_bytes(hex_number).unwrap();
-        // Derive the correct modulus from the size of the byte array.
-        let modulus = match value.len() {
-            16 => BigUint::from_slice(&MODULUS_ARRAY_128),
-            20 => BigUint::from_slice(&MODULUS_ARRAY_160),
-            24 => BigUint::from_slice(&MODULUS_ARRAY_192),
-            28 => BigUint::from_slice(&MODULUS_ARRAY_224),
-            32 => BigUint::from_slice(&MODULUS_ARRAY_256),
-            len => panic!("Invalid bit length in test: {}", len << 3),
-        };
+        // Get the modulus from the size of the byte array.
+        let modulus = get_modulus_for_bits(value.len() << 3).unwrap();
         // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
         // Get the word list for the element.
@@ -179,20 +211,45 @@ mod tests {
         let target_list: Vec<_> = phrase.split(' ').collect();
         // Assert that the word list corresponds to the list in the test vector.
         assert_eq!(word_list, target_list);
-        println!("Real element: {:?}", element);
-        println!("Target words: {:?}", target_list);
         // Get the element for the word list.
-        let derived_element = get_element_for_mnemonic_code(&target_list, &DEFAULT_WORD_LIST).unwrap();
+        let derived_element =
+            get_element_for_mnemonic_code(&target_list, &DEFAULT_WORD_LIST).unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
+    }
+
+    #[test]
+    // This function generates random mnemonic codes and tests the correct conversion.
+    fn test_random_mnemonic_code_conversion() {
+        // The valid key sizes in bytes.
+        let key_sizes: [usize; NUM_VALID_KEY_SIZES] = [16, 20, 24, 28, 32];
+        let mut rand = rand::thread_rng();
+        for _test in 0..NUM_TEST_RUNS {
+            // Generate a random key.
+            let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+            let size = key_sizes.choose(&mut rand).unwrap();
+            let mut random_key: Vec<u8> = vec![0; *size];
+            random_key.clone_from_slice(&random_bytes[..*size]);
+            // Generate the corresponding finite field element.
+            let modulus = get_modulus_for_bits(size << 3).unwrap();
+            let element = FiniteFieldElement::new(&random_key, &modulus);
+            // Generate the mnemonic code.
+            let mnemonic = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+            // Derive the element from the mnemonic code.
+            let word_list: Vec<&str> = mnemonic.iter().map(String::as_str).collect();
+            let derived_element =
+                get_element_for_mnemonic_code(&word_list, &DEFAULT_WORD_LIST).unwrap();
+            // Assert that the derived element equals the original element.
+            assert_eq!(element, derived_element);
+        }
     }
 
     macro_rules! tests {
         ($([$hex_number:expr, $phrase:expr]),*) => {
             #[test]
-            fn test_mnemonics() {
+            fn test_mnemonic_code_conversion() {
                 $(
-                    test_mnemonic_code_conversion($hex_number, $phrase);
+                    test_mnemonic_code_conversion_vector($hex_number, $phrase);
                 )*
             }
         };
