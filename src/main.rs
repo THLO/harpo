@@ -35,7 +35,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
 
     // The create subcommand.
     let create_subcommand = SubCommand::with_name(CREATE_SUBCOMMAND)
-        .about("Creates secret-shared passphrases")
+        .about("Creates secret-shared mnemonic codes")
         .arg(file_argument.clone())
         .arg(interactive_argument.clone())
         .arg(
@@ -65,7 +65,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
 
     // The reconstruct subcommand.
     let reconstruct_subcommand = SubCommand::with_name(RECONSTRUCT_SUBCOMMAND)
-        .about("Reconstructs a passphrase")
+        .about("Reconstructs a mnemonic code")
         .arg(file_argument)
         .arg(interactive_argument)
         .group(input_group);
@@ -74,7 +74,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
     App::new("harpo")
         .version(VERSION)
         .author("Thomas Locher")
-        .about("A tool to create secret-shared passphrases and reconstruct passphrases.")
+        .about("A tool to create secret-shared mnemonic codes and reconstruct mnemonic codes.")
         .arg(
             Arg::with_name("verbose") // Verbose output can be enabled.
                 .short("v")
