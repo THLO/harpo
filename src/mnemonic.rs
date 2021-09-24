@@ -7,12 +7,53 @@ use num_bigint::BigUint;
 use sha2::{Digest, Sha256};
 use std::cmp;
 use std::error::Error;
+use std::fmt;
 
 const NUM_VALID_KEY_SIZES: usize = 5;
 const NUM_BITS_PER_WORD: usize = 11;
 const ENTROPY_INCREMENT: usize = 32;
 
 const NUM_TEST_RUNS: usize = 1000;
+
+#[derive(Eq)]
+struct MnemonicCode {
+    words: Vec<String>,
+}
+
+impl MnemonicCode {
+    fn new(words: &[&str]) -> Self {
+        let internal_words: Vec<String> = words.iter().map(|s| s.to_string()).collect();
+        MnemonicCode {
+            words: internal_words,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.words.len()
+    }
+
+    fn get_words(&self) -> Vec<&str> {
+        self.words.iter().map(|s| s.as_str()).collect()
+    }
+}
+
+impl fmt::Display for MnemonicCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut words_with_spaces = String::new();
+        for index in 0..(self.words.len() - 1) {
+            words_with_spaces.push_str(&self.words[index]);
+            words_with_spaces.push(' ');
+        }
+        words_with_spaces.push_str(&self.words[self.words.len() - 1]);
+        write!(f, "{}", words_with_spaces)
+    }
+}
+
+impl PartialEq for MnemonicCode {
+    fn eq(&self, other: &Self) -> bool {
+        self.words == other.words
+    }
+}
 
 fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     let mut left = 0;
@@ -29,15 +70,16 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
 }
 
 fn get_element_for_mnemonic_code(
-    words: &[&str],
+    mnemonic_code: &MnemonicCode,
     word_list: &[&str],
 ) -> Result<FiniteFieldElement, Box<dyn Error>> {
-    let num_words = words.len();
+    let num_words = mnemonic_code.len();
     if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
         return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
     }
     // The words are mapped to their indices in the word list:
-    let mut index_list: Vec<usize> = words
+    let index_list: Vec<usize> = mnemonic_code
+        .get_words()
         .iter()
         .map(|word| {
             get_index(word, word_list).expect("A word is used that is not in the word list.")
@@ -105,7 +147,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
 fn get_mnemonic_code_for_element(
     number: &FiniteFieldElement,
     word_list: &[&str],
-) -> Result<Vec<String>, Box<dyn Error>> {
+) -> Result<MnemonicCode, Box<dyn Error>> {
     // Get the bytes.
     let bytes = number.get_bytes();
     // Compute the SHA-256 hash.
@@ -125,12 +167,9 @@ fn get_mnemonic_code_for_element(
     // Retrieve the indices from the given byte array.
     let indices = get_indices_from_bytes(&encoded_words, num_words)?;
     // Turn the indices into words.
-    let words: Vec<String> = indices
-        .iter()
-        .map(|index| word_list[*index].to_string())
-        .collect();
-    // Return the words.
-    Ok(words)
+    let words: Vec<&str> = indices.iter().map(|index| word_list[*index]).collect();
+    // Return the mnemonic code.
+    Ok(MnemonicCode::new(&words))
 }
 
 fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, Box<dyn Error>> {
@@ -206,14 +245,15 @@ mod tests {
         let modulus = get_modulus_for_bits(value.len() << 3).unwrap();
         // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
-        // Get the word list for the element.
-        let word_list = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
-        let target_list: Vec<_> = phrase.split(' ').collect();
+        // Get the mnemonic code for the element.
+        let mnemonic_code = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+        let target_list: Vec<&str> = phrase.split(' ').collect();
         // Assert that the word list corresponds to the list in the test vector.
-        assert_eq!(word_list, target_list);
-        // Get the element for the word list.
+        assert_eq!(mnemonic_code.get_words(), target_list);
+        // Get the element for the mnemonic code derived from the target list.
+        let derived_mnemonic_code = MnemonicCode::new(&target_list);
         let derived_element =
-            get_element_for_mnemonic_code(&target_list, &DEFAULT_WORD_LIST).unwrap();
+            get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST).unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
     }
@@ -236,9 +276,8 @@ mod tests {
             // Generate the mnemonic code.
             let mnemonic = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
             // Derive the element from the mnemonic code.
-            let word_list: Vec<&str> = mnemonic.iter().map(String::as_str).collect();
             let derived_element =
-                get_element_for_mnemonic_code(&word_list, &DEFAULT_WORD_LIST).unwrap();
+                get_element_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
         }
