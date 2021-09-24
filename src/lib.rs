@@ -12,11 +12,14 @@ mod secret_sharing;
 mod word_list;
 
 /// The function is called to create secret-shared mnemonic codes.
-pub fn create() {
-    println!("TODO: This function will be invoked when creating secret-shared mnemonic codes.");
+pub fn create_secret_shared_mnemonic_codes() {
+    // Make sure that the threshold is not
+    //if threshold > num_shares {
+    //    return Err("Error: The threshold must not exceed the number of secret-shared mnemonic codes");
+    //}
 }
 
 /// The function is called to reconstruct a mnemonic code.
-pub fn reconstruct() {
+pub fn reconstruct_mnemonic_code() {
     println!("TODO: This function will be invoked when reconstructing a mnemonic code.");
 }
