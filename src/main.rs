@@ -1,6 +1,7 @@
 extern crate clap;
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use harpo::{create, reconstruct};
+use harpo::{create_secret_shared_mnemonic_codes, reconstruct_mnemonic_code};
+use std::error::Error;
 
 /// The subcommand to create secret shares.
 const CREATE_SUBCOMMAND: &str = "create";
@@ -12,6 +13,7 @@ const RECONSTRUCT_SUBCOMMAND: &str = "reconstruct";
 fn parse_command_line<'a>() -> ArgMatches<'a> {
     // Extract the version from the Cargo.toml file.
     const VERSION: &str = env!("CARGO_PKG_VERSION");
+    const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
     // The arguments that the subcommands share are defined first.
 
@@ -73,7 +75,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
     // The application including the top-level arguments.
     App::new("harpo")
         .version(VERSION)
-        .author("Thomas Locher")
+        .author(AUTHORS)
         .about("A tool to create secret-shared mnemonic codes and reconstruct mnemonic codes.")
         .arg(
             Arg::with_name("verbose") // Verbose output can be enabled.
@@ -94,12 +96,34 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .get_matches()
 }
 
+fn handle_create(command_line: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    // The unwrap() is okay because --num_shares must be provided.
+    let num_shares = command_line.value_of("rate").unwrap().parse::<u32>()?;
+    // The unwrap() is okay because --threshold must be provided.
+    let threshold = command_line.value_of("treshold").unwrap().parse::<u32>()?;
+    Ok(())
+}
+
+fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    Ok(())
+}
+
 /// The main function uses the command-line arguments to trigger the right command execution.
 fn main() {
     let command_line = parse_command_line();
     match command_line.subcommand_name() {
-        Some(RECONSTRUCT_SUBCOMMAND) => create(),
-        Some(CREATE_SUBCOMMAND) => reconstruct(),
+        Some(CREATE_SUBCOMMAND) => {
+            match handle_create(&command_line) {
+                Ok(result) => println!("{:?}", result),
+                Err(err) => println!("Error: {}", err),
+            };
+        }
+        Some(RECONSTRUCT_SUBCOMMAND) => {
+            match handle_reconstruct(&command_line) {
+                Ok(result) => println!("{:?}", result),
+                Err(err) => println!("Error: {}", err),
+            };
+        }
         _ => println!("Error: A subcommand must be provided. Use --help to view options."),
     };
 }
