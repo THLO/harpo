@@ -1,9 +1,5 @@
 use crate::math::FiniteFieldElement;
-use crate::secret_sharing::{
-    get_modulus_for_bits, get_modulus_for_words, MODULUS_ARRAY_128, MODULUS_ARRAY_160,
-    MODULUS_ARRAY_192, MODULUS_ARRAY_224, MODULUS_ARRAY_256,
-};
-use num_bigint::BigUint;
+use crate::secret_sharing::{get_modulus_for_bits, get_modulus_for_words};
 use sha2::{Digest, Sha256};
 use std::cmp;
 use std::error::Error;
@@ -16,24 +12,34 @@ const ENTROPY_INCREMENT: usize = 32;
 const NUM_TEST_RUNS: usize = 1000;
 
 #[derive(Eq)]
-struct MnemonicCode {
+pub struct MnemonicCode {
     words: Vec<String>,
 }
 
 impl MnemonicCode {
-    fn new(words: &[&str]) -> Self {
-        let internal_words: Vec<String> = words.iter().map(|s| s.to_string()).collect();
+    pub fn new(words: &[String]) -> Self {
+        let internal_words: Vec<String> = words.to_vec();
         MnemonicCode {
             words: internal_words,
         }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.words.len()
     }
 
-    fn get_words(&self) -> Vec<&str> {
+    pub fn is_empty(&self) -> bool {
+        self.words.len() == 0
+    }
+
+    pub fn get_words(&self) -> Vec<&str> {
         self.words.iter().map(|s| s.as_str()).collect()
+    }
+
+    pub fn get_num_bits(&self) -> usize {
+        // The number of security bits is the total number of bits rounded down to the
+        // nearest multiple of 'ENTROPY_INCREMENT'.
+        ((self.words.len() * NUM_BITS_PER_WORD) / ENTROPY_INCREMENT) * ENTROPY_INCREMENT
     }
 }
 
@@ -69,7 +75,7 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
-fn get_element_for_mnemonic_code(
+pub(crate) fn get_element_for_mnemonic_code(
     mnemonic_code: &MnemonicCode,
     word_list: &[&str],
 ) -> Result<FiniteFieldElement, Box<dyn Error>> {
@@ -144,7 +150,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     bytes
 }
 
-fn get_mnemonic_code_for_element(
+pub(crate) fn get_mnemonic_code_for_element(
     number: &FiniteFieldElement,
     word_list: &[&str],
 ) -> Result<MnemonicCode, Box<dyn Error>> {
@@ -167,7 +173,10 @@ fn get_mnemonic_code_for_element(
     // Retrieve the indices from the given byte array.
     let indices = get_indices_from_bytes(&encoded_words, num_words)?;
     // Turn the indices into words.
-    let words: Vec<&str> = indices.iter().map(|index| word_list[*index]).collect();
+    let words: Vec<String> = indices
+        .iter()
+        .map(|index| word_list[*index].to_string())
+        .collect();
     // Return the mnemonic code.
     Ok(MnemonicCode::new(&words))
 }
@@ -251,7 +260,9 @@ mod tests {
         // Assert that the word list corresponds to the list in the test vector.
         assert_eq!(mnemonic_code.get_words(), target_list);
         // Get the element for the mnemonic code derived from the target list.
-        let derived_mnemonic_code = MnemonicCode::new(&target_list);
+        let target_string_list: Vec<String> =
+            target_list.iter().map(|word| word.to_string()).collect();
+        let derived_mnemonic_code = MnemonicCode::new(&target_string_list);
         let derived_element =
             get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST).unwrap();
         // Assert that the derived element equals the decoded element.
