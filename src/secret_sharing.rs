@@ -76,7 +76,7 @@ pub(crate) fn get_modulus_for_words(num_words: usize) -> Option<BigUint> {
     }
 }
 
-struct SecretPolynomial {
+pub(crate) struct SecretPolynomial {
     coefficients: Vec<FiniteFieldElement>,
 }
 
@@ -92,12 +92,18 @@ impl fmt::Display for SecretShare {
 }
 
 impl SecretPolynomial {
-    fn new(degree: usize, num_bits: usize, modulus: &BigUint) -> Self {
-        let mut coefficients = vec![];
-        for _in in 0..=degree {
-            coefficients.push(FiniteFieldElement::new_random(num_bits, modulus));
+    pub(crate) fn new(secret: &FiniteFieldElement, num_bits: usize, degree: usize) -> Option<Self> {
+        let modulus_option = get_modulus_for_bits(num_bits);
+        match modulus_option {
+            Some(modulus) => {
+                let mut coefficients = vec![secret.clone()];
+                for _in in 1..=degree {
+                    coefficients.push(FiniteFieldElement::new_random(num_bits, &modulus));
+                }
+                Some(SecretPolynomial { coefficients })
+            }
+            None => None,
         }
-        SecretPolynomial { coefficients }
     }
 
     fn evaluate(&self, value: u32) -> FiniteFieldElement {
@@ -163,10 +169,11 @@ mod tests {
     #[test]
     /// The function tests the evaluation of a secret polynomial:
     fn test_polynomial_evaluation() {
-        let modulus = BigUint::from_slice(&[127]);
-        let polynomial = SecretPolynomial::new(2, 7, &modulus);
+        let modulus = get_modulus_for_bits(128).unwrap();
+        let secret = FiniteFieldElement::new_random(128, &modulus);
+        let polynomial = SecretPolynomial::new(&secret, 128, 2).unwrap();
         // Evaluate the secret polynomial at 0:
-        assert_eq!(polynomial.evaluate(0), polynomial.coefficients[0]);
+        assert_eq!(polynomial.evaluate(0), secret);
         // Evaluate the secret polynomial at 1 (which should be the sum of coefficients):
         let mut coefficient_sum: FiniteFieldElement = FiniteFieldElement::new_integer(0, &modulus);
         for coefficient in &polynomial.coefficients {
@@ -178,9 +185,8 @@ mod tests {
     #[test]
     /// The function tests the reconstruction of the secret parameter in the polynomial.
     fn test_working_secret_reconstruction() {
-        let modulus = get_modulus_for_bits(256).unwrap();
-        let polynomial = SecretPolynomial::new(2, 256, &modulus);
-        println!("Polynomial: {:?}", &polynomial.coefficients);
+        let secret = FiniteFieldElement::new_random(256, &get_modulus_for_bits(256).unwrap());
+        let polynomial = SecretPolynomial::new(&secret, 256, 2).unwrap();
         let shares = polynomial.get_secret_shares(5);
         let indices: Vec<u32> = (1..5).collect();
         let random_shares: Vec<u32> = indices
@@ -191,18 +197,17 @@ mod tests {
             .into_iter()
             .filter(|share| random_shares.contains(&share.index))
             .collect();
-        let secret = reconstruct_secret(&random_shares);
-        println!("Constructed secret: {:?}", &secret);
-        assert_eq!(polynomial.coefficients[0], secret);
+        let reconstructed_secret = reconstruct_secret(&random_shares);
+        assert_eq!(secret, reconstructed_secret);
     }
 
     #[test]
     /// The function enssures that secret cannot be reconstructed when fewer than `degree+1`
     // shares are combined.
     fn test_failing_secret_reconstruction() {
-        let modulus = get_modulus_for_bits(128).unwrap();
-        let polynomial = SecretPolynomial::new(2, 128, &modulus);
-        println!("Polynomial: {:?}", &polynomial.coefficients);
+        let modulus = &get_modulus_for_bits(256).unwrap();
+        let secret = FiniteFieldElement::new_random(256, modulus);
+        let polynomial = SecretPolynomial::new(&secret, 256, 2).unwrap();
         let shares = polynomial.get_secret_shares(5);
         let indices: Vec<u32> = (1..5).collect();
         let random_shares: Vec<u32> = indices
@@ -213,8 +218,7 @@ mod tests {
             .into_iter()
             .filter(|share| random_shares.contains(&share.index))
             .collect();
-        let secret = reconstruct_secret(&random_shares);
-        println!("Constructed secret: {:?}", &secret);
-        assert_ne!(polynomial.coefficients[0], secret);
+        let reconstructed_secret = reconstruct_secret(&random_shares);
+        assert_ne!(secret, reconstructed_secret);
     }
 }
