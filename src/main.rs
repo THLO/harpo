@@ -1,7 +1,10 @@
 extern crate clap;
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
+use harpo::mnemonic::MnemonicCode;
 use harpo::{create_secret_shared_mnemonic_codes, reconstruct_mnemonic_code};
 use std::error::Error;
+use std::fs::read_to_string;
+use std::io::{self, Read};
 
 /// The subcommand to create secret shares.
 const CREATE_SUBCOMMAND: &str = "create";
@@ -96,12 +99,49 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .get_matches()
 }
 
-fn handle_create(command_line: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    // The unwrap() is okay because --num_shares must be provided.
-    let num_shares = command_line.value_of("rate").unwrap().parse::<u32>()?;
+fn read_mnemonic_code_from_file(file_path: &str) -> Result<MnemonicCode, Box<dyn Error>> {
+    let file_content = read_to_string(file_path)?;
+    let mnemonic_string = file_content
+        .lines()
+        .find(|line| !line.starts_with('#') && !line.is_empty());
+    match mnemonic_string {
+        Some(string) => {
+            let mnemonic_words: Vec<String> =
+                string.split(' ').map(|word| word.to_lowercase()).collect();
+            Ok(MnemonicCode::new(&mnemonic_words))
+        }
+        None => Err(format!(
+            "Error. Could not read the mnemonic code from the file {}.",
+            file_path
+        )
+        .into()),
+    }
+}
+
+fn read_mnemonic_code_interactively() -> Result<MnemonicCode, Box<dyn Error>> {
+    Err("Not implemented yet!".into())
+}
+
+fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
+    // The unwrap() is okay because --num-shares must be provided.
+    let num_shares = command_line
+        .value_of("num-shares")
+        .unwrap()
+        .parse::<usize>()?;
     // The unwrap() is okay because --threshold must be provided.
-    let threshold = command_line.value_of("treshold").unwrap().parse::<u32>()?;
-    Ok(())
+    let threshold = command_line
+        .value_of("threshold")
+        .unwrap()
+        .parse::<usize>()?;
+    // Read the input.
+    let mnemonic_code = if let Some(file_path) = command_line.value_of("file") {
+        read_mnemonic_code_from_file(file_path)?
+    } else {
+        // The mnemonic code must be entered interactively.
+        read_mnemonic_code_interactively()?
+    };
+    // Create the shares and return them.
+    create_secret_shared_mnemonic_codes(&mnemonic_code, threshold, num_shares)
 }
 
 fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
@@ -113,13 +153,25 @@ fn main() {
     let command_line = parse_command_line();
     match command_line.subcommand_name() {
         Some(CREATE_SUBCOMMAND) => {
-            match handle_create(&command_line) {
-                Ok(result) => println!("{:?}", result),
+            match handle_create(
+                &command_line
+                    .subcommand_matches(CREATE_SUBCOMMAND)
+                    .expect("Error: The 'create' command must be specififed."),
+            ) {
+                Ok(mnemonic_codes) => {
+                    for mnemonic_code in mnemonic_codes {
+                        println!("{}", mnemonic_code);
+                    }
+                }
                 Err(err) => println!("Error: {}", err),
             };
         }
         Some(RECONSTRUCT_SUBCOMMAND) => {
-            match handle_reconstruct(&command_line) {
+            match handle_reconstruct(
+                &command_line
+                    .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
+                    .expect("Error: The 'create' command must be specififed."),
+            ) {
                 Ok(result) => println!("{:?}", result),
                 Err(err) => println!("Error: {}", err),
             };
