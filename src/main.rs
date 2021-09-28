@@ -106,8 +106,11 @@ fn read_mnemonic_code_from_file(file_path: &str) -> Result<MnemonicCode, Box<dyn
         .find(|line| !line.starts_with('#') && !line.is_empty());
     match mnemonic_string {
         Some(string) => {
-            let mnemonic_words: Vec<String> =
-                string.split(' ').map(|word| word.to_lowercase()).collect();
+            let mnemonic_words: Vec<String> = string
+                .to_lowercase()
+                .split(' ')
+                .map(str::to_string)
+                .collect();
             Ok(MnemonicCode::new(&mnemonic_words))
         }
         None => Err(format!(
@@ -144,8 +147,52 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<MnemonicCode>, B
     create_secret_shared_mnemonic_codes(&mnemonic_code, threshold, num_shares)
 }
 
-fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    Ok(())
+fn convert_line_to_mnemonic_code(line: &str) -> Option<MnemonicCode> {
+    let mut words: Vec<String> = line.to_lowercase().split(' ').map(str::to_string).collect();
+    if words.is_empty() {
+        return None;
+    }
+    if words[0].contains(':') {
+        let index_string = words.remove(0);
+        match index_string.replace(":", "").parse::<u32>() {
+            Ok(index) => Some(MnemonicCode::new_with_index(&words, index)),
+            Err(_) => None,
+        }
+    } else {
+        Some(MnemonicCode::new(&words))
+    }
+}
+
+fn read_mnemonic_codes_from_file(file_path: &str) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
+    let file_content = read_to_string(file_path)?;
+    let mnemonic_code_options: Vec<Option<MnemonicCode>> = file_content
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+        .map(|line| convert_line_to_mnemonic_code(line))
+        .collect();
+    let original_length = mnemonic_code_options.len();
+    let mnemonic_codes: Vec<MnemonicCode> = mnemonic_code_options.into_iter().flatten().collect();
+    if original_length != mnemonic_codes.len() {
+        Err("Encountered an invalid mnemonic code in the file.".into())
+    } else {
+        Ok(mnemonic_codes)
+    }
+}
+
+fn read_mnemonic_codes_interactively() -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
+    Err("Not implemented yet!".into())
+}
+
+fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<MnemonicCode, Box<dyn Error>> {
+    // Read the input.
+    let mnemonic_codes = if let Some(file_path) = command_line.value_of("file") {
+        read_mnemonic_codes_from_file(file_path)?
+    } else {
+        // The mnemonic codes must be entered interactively.
+        read_mnemonic_codes_interactively()?
+    };
+    // Reconstruct the mnemonic code.
+    reconstruct_mnemonic_code(&mnemonic_codes)
 }
 
 /// The main function uses the command-line arguments to trigger the right command execution.
@@ -172,7 +219,7 @@ fn main() {
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
                     .expect("Error: The 'create' command must be specififed."),
             ) {
-                Ok(result) => println!("{:?}", result),
+                Ok(mnemonic_code) => println!("{}", mnemonic_code),
                 Err(err) => println!("Error: {}", err),
             };
         }
