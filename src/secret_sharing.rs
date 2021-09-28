@@ -85,6 +85,15 @@ pub(crate) struct SecretShare {
     pub element: FiniteFieldElement,
 }
 
+impl SecretShare {
+    pub fn new(element: &FiniteFieldElement, index: u32) -> Self {
+        SecretShare {
+            index,
+            element: element.clone(),
+        }
+    }
+}
+
 impl fmt::Display for SecretShare {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[{}, {}]", self.index, self.element.value)
