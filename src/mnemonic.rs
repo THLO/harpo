@@ -1,5 +1,5 @@
 use crate::math::FiniteFieldElement;
-use crate::secret_sharing::{get_modulus_for_bits, get_modulus_for_words};
+use crate::secret_sharing::get_modulus_for_words;
 use sha2::{Digest, Sha256};
 use std::cmp;
 use std::error::Error;
@@ -7,6 +7,7 @@ use std::fmt;
 
 const NUM_VALID_KEY_SIZES: usize = 5;
 const NUM_BITS_PER_WORD: usize = 11;
+const NUM_BITS_PER_INDEX: usize = 4;
 const ENTROPY_INCREMENT: usize = 32;
 
 const NUM_TEST_RUNS: usize = 1000;
@@ -14,6 +15,7 @@ const NUM_TEST_RUNS: usize = 1000;
 #[derive(Eq)]
 pub struct MnemonicCode {
     words: Vec<String>,
+    index: Option<u32>,
 }
 
 impl MnemonicCode {
@@ -21,6 +23,15 @@ impl MnemonicCode {
         let internal_words: Vec<String> = words.to_vec();
         MnemonicCode {
             words: internal_words,
+            index: None,
+        }
+    }
+
+    pub fn new_with_index(words: &[String], index: u32) -> Self {
+        let internal_words: Vec<String> = words.to_vec();
+        MnemonicCode {
+            words: internal_words,
+            index: Some(index),
         }
     }
 
@@ -34,6 +45,10 @@ impl MnemonicCode {
 
     pub fn get_words(&self) -> Vec<&str> {
         self.words.iter().map(|s| s.as_str()).collect()
+    }
+
+    pub fn get_index(&self) -> Option<u32> {
+        self.index
     }
 
     pub fn get_num_bits(&self) -> usize {
@@ -51,7 +66,10 @@ impl fmt::Display for MnemonicCode {
             words_with_spaces.push(' ');
         }
         words_with_spaces.push_str(&self.words[self.words.len() - 1]);
-        write!(f, "{}", words_with_spaces)
+        match self.index {
+            Some(index) => write!(f, "{}: {}", index, words_with_spaces),
+            None => write!(f, "{}", words_with_spaces),
+        }
     }
 }
 
@@ -75,10 +93,10 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
-pub(crate) fn get_element_for_mnemonic_code(
+pub(crate) fn get_element_and_index_for_mnemonic_code(
     mnemonic_code: &MnemonicCode,
     word_list: &[&str],
-) -> Result<FiniteFieldElement, Box<dyn Error>> {
+) -> Result<(FiniteFieldElement, u32), Box<dyn Error>> {
     let num_words = mnemonic_code.len();
     if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
         return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
@@ -101,8 +119,15 @@ pub(crate) fn get_element_for_mnemonic_code(
     // Get the modulus. Calling unwrap() is okay here
     // because the number of words was checked before.
     let modulus = get_modulus_for_words(num_words).unwrap();
+    // Get the index.
+    let index = if let Some(index) = mnemonic_code.get_index() {
+        index
+    } else {
+        // The index is encoded in byte `num_used_bytes`.
+        (bytes[num_used_bytes] >> (8 - NUM_BITS_PER_INDEX)) as u32
+    };
     // Return the corresponding finite field element.
-    Ok(FiniteFieldElement::new(&used_bytes, &modulus))
+    Ok((FiniteFieldElement::new(&used_bytes, &modulus), index))
 }
 
 fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
@@ -152,6 +177,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
 
 pub(crate) fn get_mnemonic_code_for_element(
     number: &FiniteFieldElement,
+    index: u32,
     word_list: &[&str],
 ) -> Result<MnemonicCode, Box<dyn Error>> {
     // Get the bytes.
@@ -178,7 +204,7 @@ pub(crate) fn get_mnemonic_code_for_element(
         .map(|index| word_list[*index].to_string())
         .collect();
     // Return the mnemonic code.
-    Ok(MnemonicCode::new(&words))
+    Ok(MnemonicCode::new_with_index(&words, index))
 }
 
 fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, Box<dyn Error>> {
@@ -209,6 +235,7 @@ fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::secret_sharing::get_modulus_for_bits;
     use crate::word_list::DEFAULT_WORD_LIST;
     use rand::{seq::SliceRandom, Rng};
 
@@ -255,16 +282,17 @@ mod tests {
         // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
         // Get the mnemonic code for the element.
-        let mnemonic_code = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+        let mnemonic_code = get_mnemonic_code_for_element(&element, 0, &DEFAULT_WORD_LIST).unwrap();
         let target_list: Vec<&str> = phrase.split(' ').collect();
         // Assert that the word list corresponds to the list in the test vector.
         assert_eq!(mnemonic_code.get_words(), target_list);
         // Get the element for the mnemonic code derived from the target list.
         let target_string_list: Vec<String> =
-            target_list.iter().map(|word| word.to_string()).collect();
+            target_list.iter().map(|slice| slice.to_string()).collect();
         let derived_mnemonic_code = MnemonicCode::new(&target_string_list);
-        let derived_element =
-            get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST).unwrap();
+        let (derived_element, _) =
+            get_element_and_index_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST)
+                .unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
     }
@@ -285,10 +313,10 @@ mod tests {
             let modulus = get_modulus_for_bits(size << 3).unwrap();
             let element = FiniteFieldElement::new(&random_key, &modulus);
             // Generate the mnemonic code.
-            let mnemonic = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+            let mnemonic = get_mnemonic_code_for_element(&element, 0, &DEFAULT_WORD_LIST).unwrap();
             // Derive the element from the mnemonic code.
-            let derived_element =
-                get_element_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
+            let (derived_element, _) =
+                get_element_and_index_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
         }
