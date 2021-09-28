@@ -11,7 +11,9 @@ mod secret_sharing;
 /// The default word list is loaded from a separate module.
 mod word_list;
 
-use mnemonic::{get_element_for_mnemonic_code, get_mnemonic_code_for_element, MnemonicCode};
+use mnemonic::{
+    get_element_and_index_for_mnemonic_code, get_mnemonic_code_for_element, MnemonicCode,
+};
 use secret_sharing::SecretPolynomial;
 use std::error::Error;
 use word_list::DEFAULT_WORD_LIST;
@@ -22,14 +24,12 @@ pub fn create_secret_shared_mnemonic_codes(
     threshold: usize,
     num_shares: usize,
 ) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
-    // Get the default word list.
-    let word_list = DEFAULT_WORD_LIST;
-    // Create the mnemonic codes.
+    // Create the mnemonic codes using the default word list.
     create_secret_shared_mnemonic_codes_for_word_list(
         mnemonic_code,
         threshold,
         num_shares,
-        &word_list,
+        &DEFAULT_WORD_LIST,
     )
 }
 
@@ -48,7 +48,7 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
         );
     }
     // Turn the mnemonic_code into a finite field element.
-    let secret = get_element_for_mnemonic_code(mnemonic_code, word_list)?;
+    let (secret, _) = get_element_and_index_for_mnemonic_code(mnemonic_code, word_list)?;
     // The degree is 1 lower than the threshold.
     let degree = threshold - 1;
     // Get the number of bits of security.
@@ -60,8 +60,9 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
             let secret_shares = polynomial.get_secret_shares(num_shares as u32);
             // Turn the secret shares into mnemonic codes and return them.
             let mut mnemonic_codes = vec![];
-            for secret in secret_shares {
-                let element = get_mnemonic_code_for_element(&secret.element, word_list)?;
+            for share in secret_shares {
+                let element =
+                    get_mnemonic_code_for_element(&share.element, share.index, word_list)?;
                 mnemonic_codes.push(element);
             }
             Ok(mnemonic_codes)
@@ -70,7 +71,30 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
     }
 }
 
+pub fn reconstruct_mnemonic_code(
+    mnemonic_codes: &[MnemonicCode],
+) -> Result<MnemonicCode, Box<dyn Error>> {
+    // Reconstruct the mnemonic code using the default word list
+    reconstruct_mnemonic_code_for_word_list(mnemonic_codes, &DEFAULT_WORD_LIST)
+}
+
 /// The function is called to reconstruct a mnemonic code.
-pub fn reconstruct_mnemonic_code() {
-    println!("TODO: This function will be invoked when reconstructing a mnemonic code.");
+pub fn reconstruct_mnemonic_code_for_word_list(
+    mnemonic_codes: &[MnemonicCode],
+    word_list: &[&str],
+) -> Result<MnemonicCode, Box<dyn Error>> {
+    // Ensure that all mnemonic codes have the same length and that the length is valid.
+    if mnemonic_codes.is_empty() {
+        return Err("Error: No mnemonic codes provided.".into());
+    }
+    let num_words = mnemonic_codes[0].len();
+    if !(12..=24).contains(&num_words) || num_words % 3 != 0 {
+        return Err("Error: Invalid number of words.".into());
+    }
+    if let Some(entry) = mnemonic_codes.iter().find(|code| code.len() != num_words) {
+        Err("Found mnemonic codes with different lenghts.".into())
+    } else {
+        // Get the corresponding secret shares.
+        Err("Not implemented yet!".into())
+    }
 }
