@@ -93,6 +93,16 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
+pub(crate) fn get_element_for_mnemonic_code(
+    mnemonic_code: &MnemonicCode,
+    word_list: &[&str],
+) -> Result<FiniteFieldElement, Box<dyn Error>> {
+    // Get the element and discard the index.
+    let (element, _) = get_element_and_index_for_mnemonic_code(mnemonic_code, word_list)?;
+    // Return the corresponding finite field element.
+    Ok(element)
+}
+
 pub(crate) fn get_element_and_index_for_mnemonic_code(
     mnemonic_code: &MnemonicCode,
     word_list: &[&str],
@@ -117,17 +127,17 @@ pub(crate) fn get_element_and_index_for_mnemonic_code(
     let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
     used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
     // Get the modulus. Calling unwrap() is okay here
-    // because the number of words was checked before.
+    // because the number of words is checked at the beginning of the function call.
     let modulus = get_modulus_for_words(num_words).unwrap();
     // Get the index.
     let index = if let Some(index) = mnemonic_code.get_index() {
         index
     } else {
-        // The index is encoded in byte `num_used_bytes`.
+        // The index is encoded in the byte at index `num_used_bytes`.
         (bytes[num_used_bytes] >> (8 - NUM_BITS_PER_INDEX)) as u32
     };
-    // Return the corresponding finite field element.
-    Ok((FiniteFieldElement::new(&used_bytes, &modulus), index))
+    // Return the corresponding finite field element and index.
+    Ok((FiniteFieldElement::new(&bytes, &modulus), index))
 }
 
 fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
@@ -177,9 +187,14 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
 
 pub(crate) fn get_mnemonic_code_for_element(
     number: &FiniteFieldElement,
-    index: u32,
+    index: Option<u32>,
+    embed_index: bool,
     word_list: &[&str],
 ) -> Result<MnemonicCode, Box<dyn Error>> {
+    // Ensure that there is an index if it is to be embedded.
+    if embed_index && index.is_none() {
+        return Err("Error no index is provided to embed in the mnemonic code.".into());
+    }
     // Get the bytes.
     let bytes = number.get_bytes();
     // Compute the SHA-256 hash.
@@ -193,9 +208,16 @@ pub(crate) fn get_mnemonic_code_for_element(
     let mut encoded_words = vec![0; (total_num_bits + 7) >> 3];
     // Copy the number into the encoded words array.
     encoded_words[..bytes.len()].clone_from_slice(&bytes[..]);
-    // Append a single byte of the hash. This is sufficient as the checksum length is
-    // at most 8 bits.
-    encoded_words[bytes.len()] = hash[0];
+    // When embedding the index of the mnemonic code, it is placed in the 4 higher-order bits
+    // of the byte that holds the first byte of the hash.
+    encoded_words[bytes.len()] = if embed_index {
+        match index {
+            Some(embedded_index) => ((embedded_index as u8) << 4) + (hash[0] % (1 << 4)),
+            None => hash[0],
+        }
+    }else {
+        hash[0]
+    };
     // Retrieve the indices from the given byte array.
     let indices = get_indices_from_bytes(&encoded_words, num_words)?;
     // Turn the indices into words.
@@ -204,7 +226,15 @@ pub(crate) fn get_mnemonic_code_for_element(
         .map(|index| word_list[*index].to_string())
         .collect();
     // Return the mnemonic code.
-    Ok(MnemonicCode::new_with_index(&words, index))
+    if !embed_index {
+        // If the index is not embedded but there is an index, we need to provide it explicitly.
+        match index {
+            Some(embedded_index) => Ok(MnemonicCode::new_with_index(&words, embedded_index)),
+            None => Ok(MnemonicCode::new(&words))
+        }
+    }else {
+        Ok(MnemonicCode::new(&words))
+    }
 }
 
 fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, Box<dyn Error>> {
@@ -290,8 +320,8 @@ mod tests {
         let target_string_list: Vec<String> =
             target_list.iter().map(|slice| slice.to_string()).collect();
         let derived_mnemonic_code = MnemonicCode::new(&target_string_list);
-        let (derived_element, _) =
-            get_element_and_index_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST)
+        let derived_element =
+            get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST)
                 .unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
@@ -315,8 +345,8 @@ mod tests {
             // Generate the mnemonic code.
             let mnemonic = get_mnemonic_code_for_element(&element, 0, &DEFAULT_WORD_LIST).unwrap();
             // Derive the element from the mnemonic code.
-            let (derived_element, _) =
-                get_element_and_index_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
+            let derived_element =
+                get_element_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
         }
