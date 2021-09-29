@@ -12,7 +12,7 @@ mod secret_sharing;
 mod word_list;
 
 use mnemonic::{
-    get_element_and_index_for_mnemonic_code, get_mnemonic_code_for_element, MnemonicCode,
+    get_element_for_mnemonic_code, get_mnemonic_code_for_element, MnemonicCode,
 };
 use secret_sharing::SecretPolynomial;
 use std::error::Error;
@@ -23,12 +23,14 @@ pub fn create_secret_shared_mnemonic_codes(
     mnemonic_code: &MnemonicCode,
     threshold: usize,
     num_shares: usize,
+    embed_indices: bool,
 ) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
     // Create the mnemonic codes using the default word list.
     create_secret_shared_mnemonic_codes_for_word_list(
         mnemonic_code,
         threshold,
         num_shares,
+        embed_indices,
         &DEFAULT_WORD_LIST,
     )
 }
@@ -38,6 +40,7 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
     mnemonic_code: &MnemonicCode,
     threshold: usize,
     num_shares: usize,
+    embed_indices: bool,
     word_list: &[&str],
 ) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
     //Make sure that the threshold is not greater than the number of shares.
@@ -48,7 +51,7 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
         );
     }
     // Turn the mnemonic_code into a finite field element.
-    let (secret, _) = get_element_and_index_for_mnemonic_code(mnemonic_code, word_list)?;
+    let secret = get_element_for_mnemonic_code(mnemonic_code, word_list)?;
     // The degree is 1 lower than the threshold.
     let degree = threshold - 1;
     // Get the number of bits of security.
@@ -62,7 +65,7 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
             let mut mnemonic_codes = vec![];
             for share in secret_shares {
                 let element =
-                    get_mnemonic_code_for_element(&share.element, share.index, word_list)?;
+                    get_mnemonic_code_for_element(&share.element, Some(share.index), embed_indices, word_list)?;
                 mnemonic_codes.push(element);
             }
             Ok(mnemonic_codes)

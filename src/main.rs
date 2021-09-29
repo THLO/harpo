@@ -143,8 +143,10 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<MnemonicCode>, B
         // The mnemonic code must be entered interactively.
         read_mnemonic_code_interactively()?
     };
+    // Get the --no-embedding flag.
+    let embed_indices = !command_line.is_present("no-embedding");
     // Create the shares and return them.
-    create_secret_shared_mnemonic_codes(&mnemonic_code, threshold, num_shares)
+    create_secret_shared_mnemonic_codes(&mnemonic_code, threshold, num_shares, embed_indices)
 }
 
 fn convert_line_to_mnemonic_code(line: &str) -> Option<MnemonicCode> {
