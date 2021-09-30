@@ -10,15 +10,15 @@ const NUM_BITS_PER_INDEX: usize = 4;
 const ENTROPY_INCREMENT: usize = 32;
 
 #[derive(Eq)]
-pub struct MnemonicCode {
+pub struct SeedPhrase {
     words: Vec<String>,
     index: Option<u32>,
 }
 
-impl MnemonicCode {
+impl SeedPhrase {
     pub fn new(words: &[String]) -> Self {
         let internal_words: Vec<String> = words.to_vec();
-        MnemonicCode {
+        SeedPhrase {
             words: internal_words,
             index: None,
         }
@@ -26,7 +26,7 @@ impl MnemonicCode {
 
     pub fn new_with_index(words: &[String], index: u32) -> Self {
         let internal_words: Vec<String> = words.to_vec();
-        MnemonicCode {
+        SeedPhrase {
             words: internal_words,
             index: Some(index),
         }
@@ -55,7 +55,7 @@ impl MnemonicCode {
     }
 }
 
-impl fmt::Display for MnemonicCode {
+impl fmt::Display for SeedPhrase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut words_with_spaces = String::new();
         for index in 0..(self.words.len() - 1) {
@@ -70,7 +70,7 @@ impl fmt::Display for MnemonicCode {
     }
 }
 
-impl PartialEq for MnemonicCode {
+impl PartialEq for SeedPhrase {
     fn eq(&self, other: &Self) -> bool {
         self.words == other.words
     }
@@ -90,26 +90,26 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
-pub(crate) fn get_element_for_mnemonic_code(
-    mnemonic_code: &MnemonicCode,
+pub(crate) fn get_element_for_seed_phrase(
+    seed_phrase: &SeedPhrase,
     word_list: &[&str],
 ) -> Result<FiniteFieldElement, Box<dyn Error>> {
     // Get the element and discard the index.
-    let (element, _) = get_element_and_index_for_mnemonic_code(mnemonic_code, word_list)?;
+    let (element, _) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
     // Return the corresponding finite field element.
     Ok(element)
 }
 
-pub(crate) fn get_element_and_index_for_mnemonic_code(
-    mnemonic_code: &MnemonicCode,
+pub(crate) fn get_element_and_index_for_seed_phrase(
+    seed_phrase: &SeedPhrase,
     word_list: &[&str],
 ) -> Result<(FiniteFieldElement, u32), Box<dyn Error>> {
-    let num_words = mnemonic_code.len();
+    let num_words = seed_phrase.len();
     if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
         return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
     }
     // The words are mapped to their indices in the word list:
-    let index_list: Vec<usize> = mnemonic_code
+    let index_list: Vec<usize> = seed_phrase
         .get_words()
         .iter()
         .map(|word| {
@@ -127,7 +127,7 @@ pub(crate) fn get_element_and_index_for_mnemonic_code(
     // because the number of words is checked at the beginning of the function call.
     let modulus = get_modulus_for_words(num_words).unwrap();
     // Get the index.
-    let index = if let Some(index) = mnemonic_code.get_index() {
+    let index = if let Some(index) = seed_phrase.get_index() {
         index
     } else {
         // The index is encoded in the byte at index `num_used_bytes`.
@@ -182,24 +182,24 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     bytes
 }
 
-/// Convenience function to convert a finite element into a mnemonic code without embedding
-/// an index in the mnemonic code.
-pub(crate) fn get_mnemonic_code_for_element(
+/// Convenience function to convert a finite element into a seed phrase without embedding
+/// an index in the seed phrase.
+pub(crate) fn get_seed_phrase_for_element(
     number: &FiniteFieldElement,
     word_list: &[&str],
-) -> Result<MnemonicCode, Box<dyn Error>> {
-    get_mnemonic_code_for_element_with_embedding(number, None, false, word_list)
+) -> Result<SeedPhrase, Box<dyn Error>> {
+    get_seed_phrase_for_element_with_embedding(number, None, false, word_list)
 }
 
-pub(crate) fn get_mnemonic_code_for_element_with_embedding(
+pub(crate) fn get_seed_phrase_for_element_with_embedding(
     element: &FiniteFieldElement,
     index: Option<u32>,
     embed_index: bool,
     word_list: &[&str],
-) -> Result<MnemonicCode, Box<dyn Error>> {
+) -> Result<SeedPhrase, Box<dyn Error>> {
     // Ensure that there is an index if it is to be embedded.
     if embed_index && index.is_none() {
-        return Err("Error no index is provided to embed in the mnemonic code.".into());
+        return Err("Error no index is provided to embed in the seed phrase.".into());
     }
     // Get the bytes.
     let bytes = element.get_bytes();
@@ -214,7 +214,7 @@ pub(crate) fn get_mnemonic_code_for_element_with_embedding(
     let mut encoded_words = vec![0; (total_num_bits + 7) >> 3];
     // Copy the number into the encoded words array.
     encoded_words[..bytes.len()].clone_from_slice(&bytes[..]);
-    // When embedding the index of the mnemonic code, it is placed in the 4 higher-order bits
+    // When embedding the index of the seed phrase, it is placed in the 4 higher-order bits
     // of the byte that holds the first byte of the hash.
     encoded_words[bytes.len()] = if embed_index {
         match index {
@@ -231,15 +231,15 @@ pub(crate) fn get_mnemonic_code_for_element_with_embedding(
         .iter()
         .map(|index| word_list[*index].to_string())
         .collect();
-    // Return the mnemonic code.
+    // Return the seed phrase.
     if !embed_index {
         // If the index is not embedded but there is an index, we need to provide it explicitly.
         match index {
-            Some(embedded_index) => Ok(MnemonicCode::new_with_index(&words, embedded_index)),
-            None => Ok(MnemonicCode::new(&words)),
+            Some(embedded_index) => Ok(SeedPhrase::new_with_index(&words, embedded_index)),
+            None => Ok(SeedPhrase::new(&words)),
         }
     } else {
-        Ok(MnemonicCode::new(&words))
+        Ok(SeedPhrase::new(&words))
     }
 }
 
@@ -311,33 +311,33 @@ mod tests {
         assert_eq!(indices, expected_indices);
     }
 
-    /// This function tests the conversion from a byte array to a mnemonic code
+    /// This function tests the conversion from a byte array to a seed phrase
     /// and vice versa.
-    fn test_mnemonic_code_conversion_vector(hex_number: &str, phrase: &str) {
+    fn test_seed_phrase_conversion_vector(hex_number: &str, phrase: &str) {
         // Obtain the bytes from the hexadecimal encoding.
         let value = decode_hex_bytes(hex_number).unwrap();
         // Get the modulus from the size of the byte array.
         let modulus = get_modulus_for_bits(value.len() << 3).unwrap();
         // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
-        // Get the mnemonic code for the element.
-        let mnemonic_code = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+        // Get the seed phrase for the element.
+        let seed_phrase = get_seed_phrase_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
         let target_list: Vec<&str> = phrase.split(' ').collect();
         // Assert that the word list corresponds to the list in the test vector.
-        assert_eq!(mnemonic_code.get_words(), target_list);
-        // Get the element for the mnemonic code derived from the target list.
+        assert_eq!(seed_phrase.get_words(), target_list);
+        // Get the element for the seed phrase derived from the target list.
         let target_string_list: Vec<String> =
             target_list.iter().map(|slice| slice.to_string()).collect();
-        let derived_mnemonic_code = MnemonicCode::new(&target_string_list);
+        let derived_seed_phrase = SeedPhrase::new(&target_string_list);
         let derived_element =
-            get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST).unwrap();
+            get_element_for_seed_phrase(&derived_seed_phrase, &DEFAULT_WORD_LIST).unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
     }
 
     #[test]
-    // This function generates random mnemonic codes and tests the correct conversion.
-    fn test_random_mnemonic_code_conversion() {
+    // This function generates random seed phrases and tests the correct conversion.
+    fn test_random_seed_phrase_conversion() {
         // The valid key sizes in bytes.
         let key_sizes: [usize; NUM_VALID_KEY_SIZES] = [16, 20, 24, 28, 32];
         let mut rand = rand::thread_rng();
@@ -350,11 +350,11 @@ mod tests {
             // Generate the corresponding finite field element.
             let modulus = get_modulus_for_bits(size << 3).unwrap();
             let element = FiniteFieldElement::new(&random_key, &modulus);
-            // Generate the mnemonic code.
-            let mnemonic = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
-            // Derive the element from the mnemonic code.
+            // Generate the seed phrase.
+            let mnemonic = get_seed_phrase_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+            // Derive the element from the seed phrase.
             let derived_element =
-                get_element_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
+                get_element_for_seed_phrase(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
         }
@@ -363,9 +363,9 @@ mod tests {
     macro_rules! tests {
         ($([$hex_number:expr, $phrase:expr]),*) => {
             #[test]
-            fn test_mnemonic_code_conversion() {
+            fn test_seed_phrase_conversion() {
                 $(
-                    test_mnemonic_code_conversion_vector($hex_number, $phrase);
+                    test_seed_phrase_conversion_vector($hex_number, $phrase);
                 )*
             }
         };

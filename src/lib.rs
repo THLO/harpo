@@ -1,116 +1,129 @@
 /// The math module provides the required finite field operations.
 mod math;
 
-// The mnemonic module provides the conversion between mnemonic codes and the representation as
+// The seed phrase module provides the conversion between seed phrases and the representation as
 // a finite field element.
-pub mod mnemonic;
+pub mod seed_phrase;
 
 /// The secret_sharing module provides the secret-sharing functionality.
 mod secret_sharing;
 
-/// The default word list is loaded from a separate module.
+/// The default word list is loaded from the word list module.
 mod word_list;
 
-use mnemonic::{
-    get_element_and_index_for_mnemonic_code, get_element_for_mnemonic_code,
-    get_mnemonic_code_for_element, get_mnemonic_code_for_element_with_embedding, MnemonicCode,
-};
 use secret_sharing::{reconstruct_secret, SecretPolynomial, SecretShare};
+use seed_phrase::{
+    get_element_and_index_for_seed_phrase, get_element_for_seed_phrase,
+    get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, SeedPhrase,
+};
 use std::error::Error;
 use word_list::DEFAULT_WORD_LIST;
 
-/// The function is called to create secret-shared mnemonic codes.
-pub fn create_secret_shared_mnemonic_codes(
-    mnemonic_code: &MnemonicCode,
+/// The function is called to create secret-shared seed phrases.
+///
+/// Given a seed phrase, threshold, and total number of secret-shared seed phrases,
+/// the function returns a vector of seed phrases. The vector size corresponds to the
+/// specified total number of seed phrases.
+/// Each returned seed phrase has an associated index, which can be embedded in the
+/// seed phrase itself or available through the `index` field of
+/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+///
+/// * `seed_phrase` - The input seed phrase.
+/// * `threshold` - The threshold.
+/// * `num_seed_phrases` - The number of seed phrases.
+/// * `embed_indices` - Flag indicating whether seed phrase indices should be embedded.
+pub fn create_secret_shared_seed_phrases(
+    seed_phrase: &SeedPhrase,
     threshold: usize,
-    num_shares: usize,
+    num_seed_phrases: usize,
     embed_indices: bool,
-) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
-    // Create the mnemonic codes using the default word list.
-    create_secret_shared_mnemonic_codes_for_word_list(
-        mnemonic_code,
+) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+    // Create the seed phrases using the default word list.
+    create_secret_shared_seed_phrases_for_word_list(
+        seed_phrase,
         threshold,
-        num_shares,
+        num_seed_phrases,
         embed_indices,
         &DEFAULT_WORD_LIST,
     )
 }
 
-/// The function is called to create secret-shared mnemonic codes using the given word list.
-pub fn create_secret_shared_mnemonic_codes_for_word_list(
-    mnemonic_code: &MnemonicCode,
+/// The function is called to create secret-shared seed phrases using the given word list.
+pub fn create_secret_shared_seed_phrases_for_word_list(
+    seed_phrase: &SeedPhrase,
     threshold: usize,
     num_shares: usize,
     embed_indices: bool,
     word_list: &[&str],
-) -> Result<Vec<MnemonicCode>, Box<dyn Error>> {
-    //Make sure that the threshold is not greater than the number of shares.
+) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+    // Make sure that the threshold is not greater than the number of shares.
     if threshold > num_shares {
         return Err(
-            "Error: The threshold must not exceed the number of secret-shared mnemonic codes"
-                .into(),
+            "The threshold must not exceed the number of secret-shared seed phrases.".into(),
         );
     }
-    // Turn the mnemonic_code into a finite field element.
-    let secret = get_element_for_mnemonic_code(mnemonic_code, word_list)?;
+    // Make sure that the threshold at least 1.
+    if threshold < 1 {
+        return Err("The threshold must be at least 1.".into());
+    }
+    // Turn the seed_phrase into a finite field element.
+    let secret = get_element_for_seed_phrase(seed_phrase, word_list)?;
     // The degree is 1 lower than the threshold.
     let degree = threshold - 1;
     // Get the number of bits of security.
-    let num_bits = mnemonic_code.get_num_bits();
+    let num_bits = seed_phrase.get_num_bits();
     // Create a secret polynomial (note that degree = threshold - 1).
     match SecretPolynomial::new(&secret, num_bits, degree) {
         Some(polynomial) => {
             // Create the secret shares for the finite field element.
             let secret_shares = polynomial.get_secret_shares(num_shares as u32);
-            // Turn the secret shares into mnemonic codes and return them.
-            let mut mnemonic_codes = vec![];
+            // Turn the secret shares into seed phrases and return them.
+            let mut seed_phrases = vec![];
             for share in secret_shares {
-                let element = get_mnemonic_code_for_element_with_embedding(
+                let element = get_seed_phrase_for_element_with_embedding(
                     &share.element,
                     Some(share.index),
                     embed_indices,
                     word_list,
                 )?;
-                mnemonic_codes.push(element);
+                seed_phrases.push(element);
             }
-            Ok(mnemonic_codes)
+            Ok(seed_phrases)
         }
-        None => Err("Error: Could not instantiate the required secret polynomial.".into()),
+        None => Err("Could not instantiate the required secret polynomial.".into()),
     }
 }
 
-pub fn reconstruct_mnemonic_code(
-    mnemonic_codes: &[MnemonicCode],
-) -> Result<MnemonicCode, Box<dyn Error>> {
-    // Reconstruct the mnemonic code using the default word list.
-    reconstruct_mnemonic_code_for_word_list(mnemonic_codes, &DEFAULT_WORD_LIST)
+pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> Result<SeedPhrase, Box<dyn Error>> {
+    // Reconstruct the seed phrase using the default word list.
+    reconstruct_seed_phrase_for_word_list(seed_phrases, &DEFAULT_WORD_LIST)
 }
 
-/// The function is called to reconstruct a mnemonic code.
-pub fn reconstruct_mnemonic_code_for_word_list(
-    mnemonic_codes: &[MnemonicCode],
+/// The function is called to reconstruct a seed phrase.
+pub fn reconstruct_seed_phrase_for_word_list(
+    seed_phrases: &[SeedPhrase],
     word_list: &[&str],
-) -> Result<MnemonicCode, Box<dyn Error>> {
-    // Ensure that all mnemonic codes have the same length and that the length is valid.
-    if mnemonic_codes.is_empty() {
-        return Err("Error: No mnemonic codes provided.".into());
+) -> Result<SeedPhrase, Box<dyn Error>> {
+    // Ensure that all seed phrases have the same length and that the length is valid.
+    if seed_phrases.is_empty() {
+        return Err("No seed phrases provided.".into());
     }
-    let num_words = mnemonic_codes[0].len();
+    let num_words = seed_phrases[0].len();
     if !(12..=24).contains(&num_words) || num_words % 3 != 0 {
-        return Err("Error: Invalid number of words.".into());
+        return Err("Invalid number of words.".into());
     }
-    if mnemonic_codes.iter().any(|code| code.len() != num_words) {
-        Err("Found mnemonic codes with different lenghts.".into())
+    if seed_phrases.iter().any(|code| code.len() != num_words) {
+        Err("Found seed phrases with different lenghts.".into())
     } else {
         // Get the corresponding secret shares.
         let mut secret_shares = vec![];
-        for code in mnemonic_codes {
-            let (element, index) = get_element_and_index_for_mnemonic_code(code, word_list)?;
+        for code in seed_phrases {
+            let (element, index) = get_element_and_index_for_seed_phrase(code, word_list)?;
             secret_shares.push(SecretShare::new(&element, index));
         }
         // Recontruct the secret element.
         let secret_element = reconstruct_secret(&secret_shares);
-        // Turn the secret element into a mnemonic code.
-        get_mnemonic_code_for_element(&secret_element, word_list)
+        // Turn the secret element into a seed phrase.
+        get_seed_phrase_for_element(&secret_element, word_list)
     }
 }

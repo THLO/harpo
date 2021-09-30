@@ -1,2 +1,2 @@
 # harpo
-A tool for secret-shared passphrases.
+A tool for secret-shared seed phrases.
