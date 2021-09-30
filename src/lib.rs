@@ -12,9 +12,10 @@ mod secret_sharing;
 mod word_list;
 
 use mnemonic::{
-    get_element_for_mnemonic_code, get_mnemonic_code_for_element, MnemonicCode,
+    get_element_and_index_for_mnemonic_code, get_element_for_mnemonic_code,
+    get_mnemonic_code_for_element, get_mnemonic_code_for_element_with_embedding, MnemonicCode,
 };
-use secret_sharing::SecretPolynomial;
+use secret_sharing::{reconstruct_secret, SecretPolynomial, SecretShare};
 use std::error::Error;
 use word_list::DEFAULT_WORD_LIST;
 
@@ -64,8 +65,12 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
             // Turn the secret shares into mnemonic codes and return them.
             let mut mnemonic_codes = vec![];
             for share in secret_shares {
-                let element =
-                    get_mnemonic_code_for_element(&share.element, Some(share.index), embed_indices, word_list)?;
+                let element = get_mnemonic_code_for_element_with_embedding(
+                    &share.element,
+                    Some(share.index),
+                    embed_indices,
+                    word_list,
+                )?;
                 mnemonic_codes.push(element);
             }
             Ok(mnemonic_codes)
@@ -77,7 +82,7 @@ pub fn create_secret_shared_mnemonic_codes_for_word_list(
 pub fn reconstruct_mnemonic_code(
     mnemonic_codes: &[MnemonicCode],
 ) -> Result<MnemonicCode, Box<dyn Error>> {
-    // Reconstruct the mnemonic code using the default word list
+    // Reconstruct the mnemonic code using the default word list.
     reconstruct_mnemonic_code_for_word_list(mnemonic_codes, &DEFAULT_WORD_LIST)
 }
 
@@ -94,10 +99,18 @@ pub fn reconstruct_mnemonic_code_for_word_list(
     if !(12..=24).contains(&num_words) || num_words % 3 != 0 {
         return Err("Error: Invalid number of words.".into());
     }
-    if let Some(entry) = mnemonic_codes.iter().find(|code| code.len() != num_words) {
+    if mnemonic_codes.iter().any(|code| code.len() != num_words) {
         Err("Found mnemonic codes with different lenghts.".into())
     } else {
         // Get the corresponding secret shares.
-        Err("Not implemented yet!".into())
+        let mut secret_shares = vec![];
+        for code in mnemonic_codes {
+            let (element, index) = get_element_and_index_for_mnemonic_code(code, word_list)?;
+            secret_shares.push(SecretShare::new(&element, index));
+        }
+        // Recontruct the secret element.
+        let secret_element = reconstruct_secret(&secret_shares);
+        // Turn the secret element into a mnemonic code.
+        get_mnemonic_code_for_element(&secret_element, word_list)
     }
 }
