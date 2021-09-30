@@ -5,12 +5,9 @@ use std::cmp;
 use std::error::Error;
 use std::fmt;
 
-const NUM_VALID_KEY_SIZES: usize = 5;
 const NUM_BITS_PER_WORD: usize = 11;
 const NUM_BITS_PER_INDEX: usize = 4;
 const ENTROPY_INCREMENT: usize = 32;
-
-const NUM_TEST_RUNS: usize = 1000;
 
 #[derive(Eq)]
 pub struct MnemonicCode {
@@ -185,8 +182,17 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     bytes
 }
 
+/// Convenience function to convert a finite element into a mnemonic code without embedding
+/// an index in the mnemonic code.
 pub(crate) fn get_mnemonic_code_for_element(
     number: &FiniteFieldElement,
+    word_list: &[&str],
+) -> Result<MnemonicCode, Box<dyn Error>> {
+    get_mnemonic_code_for_element_with_embedding(number, None, false, word_list)
+}
+
+pub(crate) fn get_mnemonic_code_for_element_with_embedding(
+    element: &FiniteFieldElement,
     index: Option<u32>,
     embed_index: bool,
     word_list: &[&str],
@@ -196,7 +202,7 @@ pub(crate) fn get_mnemonic_code_for_element(
         return Err("Error no index is provided to embed in the mnemonic code.".into());
     }
     // Get the bytes.
-    let bytes = number.get_bytes();
+    let bytes = element.get_bytes();
     // Compute the SHA-256 hash.
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
@@ -215,7 +221,7 @@ pub(crate) fn get_mnemonic_code_for_element(
             Some(embedded_index) => ((embedded_index as u8) << 4) + (hash[0] % (1 << 4)),
             None => hash[0],
         }
-    }else {
+    } else {
         hash[0]
     };
     // Retrieve the indices from the given byte array.
@@ -230,9 +236,9 @@ pub(crate) fn get_mnemonic_code_for_element(
         // If the index is not embedded but there is an index, we need to provide it explicitly.
         match index {
             Some(embedded_index) => Ok(MnemonicCode::new_with_index(&words, embedded_index)),
-            None => Ok(MnemonicCode::new(&words))
+            None => Ok(MnemonicCode::new(&words)),
         }
-    }else {
+    } else {
         Ok(MnemonicCode::new(&words))
     }
 }
@@ -268,6 +274,9 @@ mod tests {
     use crate::secret_sharing::get_modulus_for_bits;
     use crate::word_list::DEFAULT_WORD_LIST;
     use rand::{seq::SliceRandom, Rng};
+
+    const NUM_VALID_KEY_SIZES: usize = 5;
+    const NUM_TEST_RUNS: usize = 1000;
 
     fn decode_hex_bytes(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         if input.len() % 2 != 0 {
@@ -312,7 +321,7 @@ mod tests {
         // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
         // Get the mnemonic code for the element.
-        let mnemonic_code = get_mnemonic_code_for_element(&element, 0, &DEFAULT_WORD_LIST).unwrap();
+        let mnemonic_code = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
         let target_list: Vec<&str> = phrase.split(' ').collect();
         // Assert that the word list corresponds to the list in the test vector.
         assert_eq!(mnemonic_code.get_words(), target_list);
@@ -321,8 +330,7 @@ mod tests {
             target_list.iter().map(|slice| slice.to_string()).collect();
         let derived_mnemonic_code = MnemonicCode::new(&target_string_list);
         let derived_element =
-            get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST)
-                .unwrap();
+            get_element_for_mnemonic_code(&derived_mnemonic_code, &DEFAULT_WORD_LIST).unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
     }
@@ -343,7 +351,7 @@ mod tests {
             let modulus = get_modulus_for_bits(size << 3).unwrap();
             let element = FiniteFieldElement::new(&random_key, &modulus);
             // Generate the mnemonic code.
-            let mnemonic = get_mnemonic_code_for_element(&element, 0, &DEFAULT_WORD_LIST).unwrap();
+            let mnemonic = get_mnemonic_code_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
             // Derive the element from the mnemonic code.
             let derived_element =
                 get_element_for_mnemonic_code(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
