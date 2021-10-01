@@ -5,6 +5,8 @@ use std::cmp;
 use std::error::Error;
 use std::fmt;
 
+pub const MIN_NUM_WORDS: usize = 12;
+
 const NUM_BITS_PER_WORD: usize = 11;
 const NUM_BITS_PER_INDEX: usize = 4;
 const ENTROPY_INCREMENT: usize = 32;
@@ -109,13 +111,13 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
         return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
     }
     // The words are mapped to their indices in the word list:
-    let index_list: Vec<usize> = seed_phrase
-        .get_words()
-        .iter()
-        .map(|word| {
-            get_index(word, word_list).expect("A word is used that is not in the word list.")
-        })
-        .collect();
+    let mut index_list: Vec<usize> = vec![];
+    for word in seed_phrase.get_words() {
+        match get_index(word, word_list) {
+            Some(index) => index_list.push(index),
+            None => return Err(format!("Invalid word '{}' found.", word).into()),
+        };
+    }
     // Convert the indices into a byte array.
     let bytes = get_bytes_from_indices(&index_list);
     // The number of bytes used to build the element is a multiple of 32 bit = 4 bytes.
