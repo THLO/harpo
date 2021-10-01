@@ -16,6 +16,7 @@ use seed_phrase::{
     get_element_and_index_for_seed_phrase, get_element_for_seed_phrase,
     get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, SeedPhrase,
 };
+use std::collections::HashSet;
 use std::error::Error;
 use word_list::DEFAULT_WORD_LIST;
 
@@ -117,9 +118,14 @@ pub fn reconstruct_seed_phrase_for_word_list(
     } else {
         // Get the corresponding secret shares.
         let mut secret_shares = vec![];
+        // Create a hash set of indices.
+        let mut indices = HashSet::new();
         for code in seed_phrases {
             let (element, index) = get_element_and_index_for_seed_phrase(code, word_list)?;
-            secret_shares.push(SecretShare::new(&element, index));
+            if !indices.contains(&index) {
+                secret_shares.push(SecretShare::new(&element, index));
+                indices.insert(index);
+            }
         }
         // Recontruct the secret element.
         let secret_element = reconstruct_secret(&secret_shares);
