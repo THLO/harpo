@@ -1,10 +1,9 @@
 extern crate clap;
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use harpo::seed_phrase::SeedPhrase;
+use harpo::seed_phrase::{SeedPhrase, MIN_NUM_WORDS};
 use harpo::{create_secret_shared_seed_phrases, reconstruct_seed_phrase};
 use std::error::Error;
 use std::fs::read_to_string;
-use std::io::{self, Read};
 
 /// The subcommand to create secret shares.
 const CREATE_SUBCOMMAND: &str = "create";
@@ -100,20 +99,37 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .get_matches()
 }
 
+fn convert_string_to_seed_phrase(input: &str) -> Option<SeedPhrase> {
+    let mut words: Vec<String> = input
+        .to_lowercase()
+        .trim()
+        .split(' ')
+        .map(str::to_string)
+        .collect();
+    if words.len() < MIN_NUM_WORDS {
+        return None;
+    }
+    if words[0].contains(':') {
+        let index_string = words.remove(0);
+        match index_string.replace(":", "").parse::<u32>() {
+            Ok(index) => Some(SeedPhrase::new_with_index(&words, index)),
+            Err(_) => None,
+        }
+    } else {
+        Some(SeedPhrase::new(&words))
+    }
+}
+
 fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Error>> {
     let file_content = read_to_string(file_path)?;
-    let mnemonic_string = file_content
+    let seed_phrase_string = file_content
         .lines()
         .find(|line| !line.starts_with('#') && !line.is_empty());
-    match mnemonic_string {
-        Some(string) => {
-            let mnemonic_words: Vec<String> = string
-                .to_lowercase()
-                .split(' ')
-                .map(str::to_string)
-                .collect();
-            Ok(SeedPhrase::new(&mnemonic_words))
-        }
+    match seed_phrase_string {
+        Some(seed_phrase_string) => match convert_string_to_seed_phrase(seed_phrase_string) {
+            Some(seed_phrase) => Ok(seed_phrase),
+            None => Err("Could not convert the input into a seed phrase.".into()),
+        },
         None => Err(format!(
             "Error. Could not read the seed phrase from the file {}.",
             file_path
@@ -123,7 +139,13 @@ fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Err
 }
 
 fn read_seed_phrase_interactively() -> Result<SeedPhrase, Box<dyn Error>> {
-    Err("Not implemented yet!".into())
+    let mut seed_phrase_string = String::new();
+    println!("Please enter your seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
+    let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
+    match convert_string_to_seed_phrase(&seed_phrase_string) {
+        Some(seed_phrase) => Ok(seed_phrase),
+        None => Err("Could not parse the seed phrase.".into()),
+    }
 }
 
 fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
@@ -150,28 +172,12 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box
     create_secret_shared_seed_phrases(&seed_phrase, threshold, num_shares, embed_indices)
 }
 
-fn convert_line_to_seed_phrase(line: &str) -> Option<SeedPhrase> {
-    let mut words: Vec<String> = line.to_lowercase().split(' ').map(str::to_string).collect();
-    if words.is_empty() {
-        return None;
-    }
-    if words[0].contains(':') {
-        let index_string = words.remove(0);
-        match index_string.replace(":", "").parse::<u32>() {
-            Ok(index) => Some(SeedPhrase::new_with_index(&words, index)),
-            Err(_) => None,
-        }
-    } else {
-        Some(SeedPhrase::new(&words))
-    }
-}
-
 fn read_seed_phrases_from_file(file_path: &str) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
     let file_content = read_to_string(file_path)?;
     let seed_phrase_options: Vec<Option<SeedPhrase>> = file_content
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
-        .map(|line| convert_line_to_seed_phrase(line))
+        .map(|line| convert_string_to_seed_phrase(line))
         .collect();
     let original_length = seed_phrase_options.len();
     let seed_phrases: Vec<SeedPhrase> = seed_phrase_options.into_iter().flatten().collect();
@@ -183,7 +189,26 @@ fn read_seed_phrases_from_file(file_path: &str) -> Result<Vec<SeedPhrase>, Box<d
 }
 
 fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
-    Err("Not implemented yet!".into())
+    let mut seed_phrases = vec![];
+    let mut seed_phrase_string = String::new();
+    println!("Please enter the first secret-shared seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
+    let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
+    match convert_string_to_seed_phrase(&seed_phrase_string) {
+        Some(seed_phrase) => seed_phrases.push(seed_phrase),
+        None => return Err("Could not convert the input into a seed phrase.".into()),
+    }
+    seed_phrase_string.clear();
+    println!();
+    println!("Please enter the next secret-shared seed phrase (press enter when done):");
+    let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
+    while let Some(seed_phrase) = convert_string_to_seed_phrase(&seed_phrase_string) {
+        seed_phrases.push(seed_phrase);
+        seed_phrase_string.clear();
+        println!();
+        println!("Please enter the next secret-shared seed phrase (press enter when done):");
+        let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
+    }
+    Ok(seed_phrases)
 }
 
 fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<SeedPhrase, Box<dyn Error>> {
@@ -209,8 +234,11 @@ fn main() {
                     .expect("The 'create' command must be specififed."),
             ) {
                 Ok(seed_phrases) => {
+                    println!();
+                    println!("Created secret-shared seed phrases:");
+                    println!("-----------------------------------");
                     for seed_phrase in seed_phrases {
-                        println!("Error: {}", seed_phrase);
+                        println!("{}", seed_phrase);
                     }
                 }
                 Err(err) => println!("Error: {}", err),
@@ -222,7 +250,12 @@ fn main() {
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
                     .expect("Error: The 'create' command must be specififed."),
             ) {
-                Ok(seed_phrase) => println!("{}", seed_phrase),
+                Ok(seed_phrase) => {
+                    println!();
+                    println!("Reconstructed seed phrase:");
+                    println!("--------------------------");
+                    println!("{}", seed_phrase)
+                }
                 Err(err) => println!("Error: {}", err),
             };
         }
