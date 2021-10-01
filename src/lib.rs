@@ -1,3 +1,20 @@
+//! <h1>harpo</h1>
+//!
+
+//! The `harpo` crate provides functionality to secret-share seed phrases.
+//!
+//! The main functions that `harpo` provides are:
+//! * [create_secret_shared_seed_phrases](fn.create_secret_shared_seed_phrases.html):
+//!   Given a seed phrase, create the requested number of
+//!   secret-shared seed phrases. A threshold must be provided as well, specifying how many
+//!   secret-shared seed phrases are required to reconstruct the original seed phrase.
+//! * [reconstruct_seed_phrase](fn.econstruct_seed_phrase.html): Given a set of
+//!   secret-shared seed phrases, the function
+//!   reconstruct a seed phrase.
+//!
+//! The additional functionality that is provided is documented below.
+//!
+
 /// The math module provides the required finite field operations.
 mod math;
 
@@ -26,8 +43,9 @@ use word_list::DEFAULT_WORD_LIST;
 /// the function returns a vector of seed phrases. The vector size corresponds to the
 /// specified total number of seed phrases.
 /// Each returned seed phrase has an associated index, which can be embedded in the
-/// seed phrase itself or available through the `index` field of
+/// seed phrase itself or made available through the `index` field of
 /// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+/// The flag `embed_indices` is used to specify how to handle indices.
 ///
 /// * `seed_phrase` - The input seed phrase.
 /// * `threshold` - The threshold.
@@ -49,7 +67,21 @@ pub fn create_secret_shared_seed_phrases(
     )
 }
 
-/// The function is called to create secret-shared seed phrases using the given word list.
+/// The function is called to create secret-shared seed phrases.
+///
+/// Given a seed phrase, threshold, total number of secret-shared seed phrases, and a word list,
+/// the function returns a vector of seed phrases. The vector size corresponds to the
+/// specified total number of seed phrases.
+/// Each returned seed phrase has an associated index, which can be embedded in the
+/// seed phrase itself or made available through the `index` field of
+/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+/// The flag `embed_indices` is used to specify how to handle indices.
+///
+/// * `seed_phrase` - The input seed phrase.
+/// * `threshold` - The threshold.
+/// * `num_seed_phrases` - The number of seed phrases.
+/// * `embed_indices` - Flag indicating whether seed phrase indices should be embedded.
+/// * `word_list` - The word list for the seed phrases.
 pub fn create_secret_shared_seed_phrases_for_word_list(
     seed_phrase: &SeedPhrase,
     threshold: usize,
@@ -95,12 +127,25 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     }
 }
 
+/// The function is called to recontruct a seed phrase.
+///
+/// Given a list of secret-shared seed phrases, the function
+/// reconstructs the seed phrase that was originally used to generate the given seed phrases.
+///
+/// * `seed_phrases` - The input seed phrases.
+/// * `word_list` - The word list for the seed phrases.
 pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> Result<SeedPhrase, Box<dyn Error>> {
     // Reconstruct the seed phrase using the default word list.
     reconstruct_seed_phrase_for_word_list(seed_phrases, &DEFAULT_WORD_LIST)
 }
 
-/// The function is called to reconstruct a seed phrase.
+/// The function is called to recontruct a seed phrase.
+///
+/// Given a list of secret-shared seed phrases and a list of permissible words, the function
+/// reconstructs the seed phrase that was originally used to generate the given seed phrases.
+///
+/// * `seed_phrases` - The input seed phrases.
+/// * `word_list` - The word list for the seed phrases.
 pub fn reconstruct_seed_phrase_for_word_list(
     seed_phrases: &[SeedPhrase],
     word_list: &[&str],
@@ -114,7 +159,7 @@ pub fn reconstruct_seed_phrase_for_word_list(
         return Err("Invalid number of words.".into());
     }
     if seed_phrases.iter().any(|code| code.len() != num_words) {
-        Err("Found seed phrases with different lenghts.".into())
+        Err("Found seed phrases with different lengths.".into())
     } else {
         // Get the corresponding secret shares.
         let mut secret_shares = vec![];

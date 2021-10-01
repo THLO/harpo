@@ -79,13 +79,14 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .version(VERSION)
         .author(AUTHORS)
         .about("A tool to create secret-shared seed phrases and reconstruct seed phrases.")
-        .arg(
-            Arg::with_name("verbose") // Verbose output can be enabled.
-                .short("v")
-                .long("verbose")
-                .help("Prints verbose output")
-                .takes_value(false),
-        )
+        // Commented out until an implementation is added.
+        //.arg(
+        //    Arg::with_name("verbose") // Verbose output can be enabled.
+        //        .short("v")
+        //        .long("verbose")
+        //        .help("Prints verbose output")
+        //        .takes_value(false),
+        //)
         // Commented out until an implementation is added.
         //.arg(
         //    Arg::with_name("word-list") // A word-list file can be provided.
@@ -94,21 +95,34 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         //        .help("Reads the word list from the provided file")
         //        .takes_value(true),
         //)
-        .subcommand(create_subcommand)
-        .subcommand(reconstruct_subcommand)
+        .subcommand(create_subcommand) // Add the create subcommand.
+        .subcommand(reconstruct_subcommand) // Add the reconstruct subcommand.
         .get_matches()
 }
 
+/// The function converts the given string into a seed phrase.
+///
+/// The function takes a space-delimited seed phrase in the form of a string (slice) as its
+/// argument and returns a [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if the string can
+/// be split into sufficiently many words.
+/// Note that the function does not verify the validity of the provided words.
+///
+/// * `input` - The input seed phrase as a space-delimited string.
 fn convert_string_to_seed_phrase(input: &str) -> Option<SeedPhrase> {
+    // Break the input into words.
     let mut words: Vec<String> = input
-        .to_lowercase()
-        .trim()
-        .split(' ')
-        .map(str::to_string)
-        .collect();
+        .replace(':', ": ") // If there is an index, ensure that it is a separate word.
+        .to_lowercase() // No upper-case words are allowed.
+        .trim() // Remove white spaces in the beginning and at the end.
+        .split(' ') // Split the string.
+        .filter(|word| !word.is_empty()) // Keep only words with a positive length.
+        .map(str::to_string) // Map the string slices to strings.
+        .collect(); // Collect the vector.
     if words.len() < MIN_NUM_WORDS {
+        // Make sure that there are sufficiently many words.
         return None;
     }
+    // If there is an explicit index, extract it from the list of words.
     if words[0].contains(':') {
         let index_string = words.remove(0);
         match index_string.replace(":", "").parse::<u32>() {
@@ -116,38 +130,60 @@ fn convert_string_to_seed_phrase(input: &str) -> Option<SeedPhrase> {
             Err(_) => None,
         }
     } else {
+        // Otherwise, create a seed phrase without an index.
         Some(SeedPhrase::new(&words))
     }
 }
 
+/// The function reads a seed phrase from the given file.
+///
+/// The function takes a file path argument and reads in a
+/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if possible.
+///
+/// * `file_path` - The path to the file containing the seed phrase.
 fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Error>> {
+    // Read the file content.
     let file_content = read_to_string(file_path)?;
+    // Find a line that might encode a seed phrase.
     let seed_phrase_string = file_content
         .lines()
         .find(|line| !line.starts_with('#') && !line.is_empty());
+    // If a seed phrase is found, turn the string into a SeedPhrase struct and return it.
     match seed_phrase_string {
         Some(seed_phrase_string) => match convert_string_to_seed_phrase(seed_phrase_string) {
             Some(seed_phrase) => Ok(seed_phrase),
             None => Err("Could not convert the input into a seed phrase.".into()),
         },
         None => Err(format!(
-            "Error. Could not read the seed phrase from the file {}.",
+            "Could not read the seed phrase from the file {}.",
             file_path
         )
         .into()),
     }
 }
 
+/// The function reads a seed phrase from standard input.
+///
+/// The function reads a line from standard input and returns it as a
+/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if possible.
 fn read_seed_phrase_interactively() -> Result<SeedPhrase, Box<dyn Error>> {
     let mut seed_phrase_string = String::new();
     println!("Please enter your seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
+    // Read from standard input.
     let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
+    // If the input can be converted to a seed phrase, return the seed phrase.
     match convert_string_to_seed_phrase(&seed_phrase_string) {
         Some(seed_phrase) => Ok(seed_phrase),
         None => Err("Could not parse the seed phrase.".into()),
     }
 }
 
+/// The function handles the creation of secret-shared seed phrases.
+///
+/// The input to the function is the command-line arguments. If processing succeeds,
+/// the function returns a vector of [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) structs.
+///
+/// * `command_line` - The command-line arguments.
 fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
     // The unwrap() is okay because --num-shares must be provided.
     let num_shares = command_line
@@ -159,7 +195,7 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box
         .value_of("threshold")
         .unwrap()
         .parse::<usize>()?;
-    // Read the input.
+    // Read the input fropm a file or interactively.
     let seed_phrase = if let Some(file_path) = command_line.value_of("file") {
         read_seed_phrase_from_file(file_path)?
     } else {
@@ -172,25 +208,42 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box
     create_secret_shared_seed_phrases(&seed_phrase, threshold, num_shares, embed_indices)
 }
 
+/// The function reads multiple seed phrases from a file.
+///
+/// The function takes a file path argument and reads in all seed phrases.
+/// If processing succeeds, a vector of
+/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) is returned.
+///
+/// * `file_path` - The path to the file containing the seed phrases.
 fn read_seed_phrases_from_file(file_path: &str) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+    // Read the file content.
     let file_content = read_to_string(file_path)?;
+    // Get all potential seed phrases.
     let seed_phrase_options: Vec<Option<SeedPhrase>> = file_content
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
         .map(|line| convert_string_to_seed_phrase(line))
         .collect();
-    let original_length = seed_phrase_options.len();
-    let seed_phrases: Vec<SeedPhrase> = seed_phrase_options.into_iter().flatten().collect();
-    if original_length != seed_phrases.len() {
+    // If there is a 'None' entry, return an error.
+    if seed_phrase_options.iter().any(|option| option.is_none()) {
         Err("Encountered an invalid seed phrase in the file.".into())
     } else {
-        Ok(seed_phrases)
+        // Otherwise, remove the 'None' entries and return the seed phrases.
+        Ok(seed_phrase_options
+            .into_iter()
+            .flatten()
+            .collect::<Vec<SeedPhrase>>())
     }
 }
 
+/// The function reads multiple seed phrases interactively.
+///
+/// The function reads lines from standard input and returns all collected seed phrases in a
+/// vector of [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) struct if possible.
 fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
     let mut seed_phrases = vec![];
     let mut seed_phrase_string = String::new();
+    // Read the first seed phrase from standard input.
     println!("Please enter the first secret-shared seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
     let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
     match convert_string_to_seed_phrase(&seed_phrase_string) {
@@ -198,6 +251,7 @@ fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> 
         None => return Err("Could not convert the input into a seed phrase.".into()),
     }
     seed_phrase_string.clear();
+    // Read the next seed phrase from standard input.
     println!();
     println!("Please enter the next secret-shared seed phrase (press enter when done):");
     let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
@@ -211,8 +265,14 @@ fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> 
     Ok(seed_phrases)
 }
 
+/// The function handles the reconstruction of a seed phrase.
+///
+/// The input to the function is the command-line arguments. If processing succeeds,
+/// the function returns the reconstructed [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+///
+/// * `command_line` - The command-line arguments.
 fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<SeedPhrase, Box<dyn Error>> {
-    // Read the input.
+    // Read the input fropm a file or interactively.
     let seed_phrases = if let Some(file_path) = command_line.value_of("file") {
         read_seed_phrases_from_file(file_path)?
     } else {
@@ -224,8 +284,13 @@ fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<SeedPhrase, Box
 }
 
 /// The main function uses the command-line arguments to trigger the right command execution.
+///
+/// Given the command-line arguments, the main function triggers the processing of the
+/// provided subcommand.
 fn main() {
+    // Get all command_line arguments.
     let command_line = parse_command_line();
+    // Trigger the right function based on the provided subcommand.
     match command_line.subcommand_name() {
         Some(CREATE_SUBCOMMAND) => {
             match handle_create(
