@@ -32,16 +32,17 @@ use secret_sharing::{reconstruct_secret, SecretPolynomial, SecretShare};
 use seed_phrase::{
     get_element_and_index_for_seed_phrase, get_element_for_seed_phrase,
     get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, SeedPhrase,
+    NUM_BITS_FOR_INDEX,
 };
 use std::collections::HashSet;
 use std::error::Error;
 use word_list::DEFAULT_WORD_LIST;
 
 /// The maximum number of shares that can be embedded.
-/// It is 16 because 4 bits are used to encode the index in the embedding. It is not easily
+/// It is `2^NUM_BITS_FOR_INDEX = 16`because 4 bits are used to encode the index in the embedding. It is not easily
 /// possible to use more than 4 bits because only 4 additional bits are used when using a 12-word
 /// seed phrase (12*11 = 132 bits to encode a secret of 128 bits).
-const MAX_EMBEDDED_SHARES: usize = 16;
+const MAX_EMBEDDED_SHARES: usize = 2 << NUM_BITS_FOR_INDEX;
 
 /// The function is called to create secret-shared seed phrases.
 ///
