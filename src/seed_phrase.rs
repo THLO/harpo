@@ -133,7 +133,8 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
         index
     } else {
         // The index is encoded in the byte at index `num_used_bytes`.
-        (bytes[num_used_bytes] >> (8 - NUM_BITS_PER_INDEX)) as u32
+        // We add 1 because 1 was subtracted when encoding the index.
+        ((bytes[num_used_bytes] >> (8 - NUM_BITS_PER_INDEX)) + 1) as u32
     };
     // Return the corresponding finite field element and index.
     Ok((FiniteFieldElement::new(&bytes, &modulus), index))
@@ -218,9 +219,10 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
     encoded_words[..bytes.len()].clone_from_slice(&bytes[..]);
     // When embedding the index of the seed phrase, it is placed in the 4 higher-order bits
     // of the byte that holds the first byte of the hash.
+    // Since the index is at least 1, we subtract 1 so that we can use represent one more index.
     encoded_words[bytes.len()] = if embed_index {
         match index {
-            Some(embedded_index) => ((embedded_index as u8) << 4) + (hash[0] % (1 << 4)),
+            Some(embedded_index) => (((embedded_index - 1) as u8) << 4) + (hash[0] % (1 << 4)),
             None => hash[0],
         }
     } else {
