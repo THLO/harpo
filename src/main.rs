@@ -79,14 +79,13 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .version(VERSION)
         .author(AUTHORS)
         .about("A tool to create secret-shared seed phrases and reconstruct seed phrases.")
-        // Commented out until an implementation is added.
-        //.arg(
-        //    Arg::with_name("verbose") // Verbose output can be enabled.
-        //        .short("v")
-        //        .long("verbose")
-        //        .help("Prints verbose output")
-        //        .takes_value(false),
-        //)
+        .arg(
+            Arg::with_name("verbose") // Verbose output can be enabled.
+                .short("v")
+                .long("verbose")
+                .help("Prints verbose output")
+                .takes_value(false),
+        )
         // Commented out until an implementation is added.
         //.arg(
         //    Arg::with_name("word-list") // A word-list file can be provided.
@@ -184,7 +183,11 @@ fn read_seed_phrase_interactively() -> Result<SeedPhrase, Box<dyn Error>> {
 /// the function returns a vector of [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) structs.
 ///
 /// * `command_line` - The command-line arguments.
-fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+/// * `verbose` - Flag indicating if verbose output should be generated.
+fn handle_create(
+    command_line: &clap::ArgMatches,
+    verbose: bool,
+) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
     // The unwrap() is okay because --num-shares must be provided.
     let num_shares = command_line
         .value_of("num-shares")
@@ -195,8 +198,19 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box
         .value_of("threshold")
         .unwrap()
         .parse::<usize>()?;
+    if verbose {
+        println!(
+            "Requested number of secret-shared seed phrases: {}",
+            num_shares
+        );
+        println!("Requested threshold for reconstruction: {}", threshold);
+        println!();
+    }
     // Read the input fropm a file or interactively.
     let seed_phrase = if let Some(file_path) = command_line.value_of("file") {
+        if verbose {
+            println!("Reading the seed phrase from {}...", file_path);
+        }
         read_seed_phrase_from_file(file_path)?
     } else {
         // The seed phrase must be entered interactively.
@@ -205,6 +219,13 @@ fn handle_create(command_line: &clap::ArgMatches) -> Result<Vec<SeedPhrase>, Box
     // Get the --no-embedding flag.
     let embed_indices = !command_line.is_present("no-embedding");
     // Create the shares and return them.
+    if verbose {
+        println!();
+        println!(
+            "Creating secret-shared seed phrases for seed phrase '{}'...",
+            seed_phrase
+        );
+    }
     create_secret_shared_seed_phrases(&seed_phrase, threshold, num_shares, embed_indices)
 }
 
@@ -271,14 +292,32 @@ fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> 
 /// the function returns the reconstructed [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
 ///
 /// * `command_line` - The command-line arguments.
-fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<SeedPhrase, Box<dyn Error>> {
+/// * `verbose` - Flag indicating if verbose output should be generated.
+fn handle_reconstruct(
+    command_line: &clap::ArgMatches,
+    verbose: bool,
+) -> Result<SeedPhrase, Box<dyn Error>> {
     // Read the input fropm a file or interactively.
     let seed_phrases = if let Some(file_path) = command_line.value_of("file") {
+        if verbose {
+            println!("Reading seed phrases from {}...", file_path);
+            println!();
+        }
         read_seed_phrases_from_file(file_path)?
     } else {
         // The seed phrases must be entered interactively.
         read_seed_phrases_interactively()?
     };
+    if verbose {
+        println!(
+            "Reconstructing the seed phrase using these {} seed phrases:",
+            seed_phrases.len()
+        );
+        println!();
+        for seed_phrase in &seed_phrases {
+            println!("{}", seed_phrase);
+        }
+    }
     // Reconstruct the seed phrase.
     reconstruct_seed_phrase(&seed_phrases)
 }
@@ -290,6 +329,8 @@ fn handle_reconstruct(command_line: &clap::ArgMatches) -> Result<SeedPhrase, Box
 fn main() {
     // Get all command_line arguments.
     let command_line = parse_command_line();
+    // Check if the verbose flag is used.
+    let verbose = command_line.is_present("verbose");
     // Trigger the right function based on the provided subcommand.
     match command_line.subcommand_name() {
         Some(CREATE_SUBCOMMAND) => {
@@ -297,6 +338,7 @@ fn main() {
                 &command_line
                     .subcommand_matches(CREATE_SUBCOMMAND)
                     .expect("The 'create' command must be specififed."),
+                verbose,
             ) {
                 Ok(seed_phrases) => {
                     println!();
@@ -314,6 +356,7 @@ fn main() {
                 &command_line
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
                     .expect("Error: The 'create' command must be specififed."),
+                verbose,
             ) {
                 Ok(seed_phrase) => {
                     println!();
