@@ -1,3 +1,7 @@
+//! The `seed_phrase` module provides the functionality to convert a seed phrase into a finite
+//! field element and vice versa.
+//!
+
 use crate::math::FiniteFieldElement;
 use crate::secret_sharing::get_modulus_for_words;
 use sha2::{Digest, Sha256};
@@ -5,12 +9,17 @@ use std::cmp;
 use std::error::Error;
 use std::fmt;
 
+/// The minimum number of words in a seed phrase.
 pub const MIN_NUM_WORDS: usize = 12;
 
+/// The number of bits that each word represents.
 const NUM_BITS_PER_WORD: usize = 11;
-const NUM_BITS_PER_INDEX: usize = 4;
+/// The number of bits used to encode an index.
+pub const NUM_BITS_FOR_INDEX: usize = 4;
+/// The increase in the number of bits from one security level to the next.
 const ENTROPY_INCREMENT: usize = 32;
 
+/// This struct represents a seed phrase.
 #[derive(Eq)]
 pub struct SeedPhrase {
     words: Vec<String>,
@@ -18,6 +27,13 @@ pub struct SeedPhrase {
 }
 
 impl SeedPhrase {
+    /// The function creates a new seed phrase using the given words.
+    ///
+    /// The list of words is accepted as is, i.e., there is no verification whether
+    /// the words comply with any standard (in particular BIP-0039).
+    /// Since no index is provided, the seed phrase is considered not to have an index.
+    ///
+    /// * `words` - The words that make up the seed phrase.
     pub fn new(words: &[String]) -> Self {
         let internal_words: Vec<String> = words.to_vec();
         SeedPhrase {
@@ -26,6 +42,14 @@ impl SeedPhrase {
         }
     }
 
+    /// The function creates a new seed phrase using the given words and index.
+    ///
+    /// The list of words is accepted as is, i.e., there is no verification whether
+    /// the words comply with any standard (in particular BIP-0039).
+    /// The index is the position in the list of secret-shared seed phrases.
+    ///
+    /// * `words` - The words that make up the seed phrase.
+    /// * `index` - The index of the seed phrase.
     pub fn new_with_index(words: &[String], index: u32) -> Self {
         let internal_words: Vec<String> = words.to_vec();
         SeedPhrase {
@@ -34,22 +58,27 @@ impl SeedPhrase {
         }
     }
 
+    /// The function returns the number of words that make up the seed phrase.
     pub fn len(&self) -> usize {
         self.words.len()
     }
 
+    /// The function returns true if the seed phrase is empty.
     pub fn is_empty(&self) -> bool {
         self.words.len() == 0
     }
 
+    /// The function returns the words that make up the seed phrase.
     pub fn get_words(&self) -> Vec<&str> {
         self.words.iter().map(|s| s.as_str()).collect()
     }
 
+    /// The function returns the index of the seed phrase, if any.
     pub fn get_index(&self) -> Option<u32> {
         self.index
     }
 
+    /// The function returns the security level of the seed phrase in bits.
     pub fn get_num_bits(&self) -> usize {
         // The number of security bits is the total number of bits rounded down to the
         // nearest multiple of 'ENTROPY_INCREMENT'.
@@ -58,13 +87,18 @@ impl SeedPhrase {
 }
 
 impl fmt::Display for SeedPhrase {
+    /// A seed phrase is displayed as a comma-delmited string.
+    /// If it has an associated index, the index followed by a colon is prepended to the
+    /// list of words.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut words_with_spaces = String::new();
+        // Create a space-delimited string of all words.
         for index in 0..(self.words.len() - 1) {
             words_with_spaces.push_str(&self.words[index]);
             words_with_spaces.push(' ');
         }
         words_with_spaces.push_str(&self.words[self.words.len() - 1]);
+        // If there is an index, prepend it.
         match self.index {
             Some(index) => write!(f, "{}: {}", index, words_with_spaces),
             None => write!(f, "{}", words_with_spaces),
@@ -73,12 +107,21 @@ impl fmt::Display for SeedPhrase {
 }
 
 impl PartialEq for SeedPhrase {
+    /// Equality of two seed phrases is defined based on the words that make up the seed phrases.
     fn eq(&self, other: &Self) -> bool {
         self.words == other.words
     }
 }
 
+/// The function returns the index of a word in a word list, if any.
+///
+/// The function searches for the given word in the given word list and returns the index
+/// in the list if it finds it. Otherwise, it returns 'None'.
+///
+/// * `word` - The word that is looked up.
+/// * `word_list` - The list of words.
 fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
+    // Use a standard binary search to look for the word.
     let mut left = 0;
     let mut right = word_list.len() - 1;
     while left <= right {
@@ -92,6 +135,14 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
     None
 }
 
+/// The function returns the finite field element corresponding to the given seed phrase.
+///
+/// Given a seed phrase and a word list, the words are turned into numbers, corresponding to their
+/// indices in the word list, and the numbers are concatenated in a byte array.
+/// The integer that defines the finite field element is extracted from these bytes.
+///
+/// * `seed_phrase` - The seed phrase.
+/// * `word_list` - The word list.
 pub(crate) fn get_element_for_seed_phrase(
     seed_phrase: &SeedPhrase,
     word_list: &[&str],
@@ -102,6 +153,15 @@ pub(crate) fn get_element_for_seed_phrase(
     Ok(element)
 }
 
+/// The function returns the finite field element and index encoded in the given seed phrase.
+///
+/// Given a seed phrase and a word list, the words are turned into numbers, corresponding to their
+/// indices in the word list, and the numbers are concatenated in a byte array.
+/// The integer that defines the finite field element and the index of the finite field element are
+/// extracted from these bytes.
+///
+/// * `seed_phrase` - The seed phrase.
+/// * `word_list` - The word list.
 pub(crate) fn get_element_and_index_for_seed_phrase(
     seed_phrase: &SeedPhrase,
     word_list: &[&str],
@@ -125,8 +185,8 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
     // Copy the bytes into a new array.
     let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
     used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
-    // Get the modulus. Calling unwrap() is okay here
-    // because the number of words is checked at the beginning of the function call.
+    // Get the modulus. Calling unwrap() is okay here because the number of words is checked
+    // at the beginning of the function call.
     let modulus = get_modulus_for_words(num_words).unwrap();
     // Get the index.
     let index = if let Some(index) = seed_phrase.get_index() {
@@ -134,16 +194,21 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
     } else {
         // The index is encoded in the byte at index `num_used_bytes`.
         // We add 1 because 1 was subtracted when encoding the index.
-        ((bytes[num_used_bytes] >> (8 - NUM_BITS_PER_INDEX)) + 1) as u32
+        ((bytes[num_used_bytes] >> (8 - NUM_BITS_FOR_INDEX)) + 1) as u32
     };
     // Return the corresponding finite field element and index.
     Ok((FiniteFieldElement::new(&bytes, &modulus), index))
 }
 
+/// The function encodes the given indices in a byte array.
+///
+/// The indices are encoded in the byte array according to the BIP-0039 specification.
+///
+/// * `indices` - The array of indices.
 fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     // Round the number of bytes up so that there is space for all indices.
     let size = (indices.len() * NUM_BITS_PER_WORD + 7) / 8;
-    // Thhe bytes are written into this byte array.
+    // The bytes are written into this byte array.
     let mut bytes: Vec<u8> = vec![0; size];
     // The number of used bits in the current byte.
     let mut num_used_bits = 0;
@@ -171,7 +236,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
             bytes[current_index] = third_byte_part << (8 - num_bits_third_byte);
             num_used_bits = num_bits_third_byte;
         } else if num_bits_second_byte == 8 {
-            // If the index fits into two bytes, consuming all bits of the second byte,
+            // If the index exactly consumes all bits of the second byte,
             // the index is increased as the byte is full.
             current_index += 1;
             num_used_bits = 0;
@@ -185,15 +250,30 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     bytes
 }
 
-/// Convenience function to convert a finite element into a seed phrase without embedding
-/// an index in the seed phrase.
+/// The function converts a finite field element into a seed phrase without embedding an index.
+///
+/// This function is merely a convenience function, calling the function
+/// `get_seed_phrase_for_element_with_embedding` with `index = None` and `embed_index = false`.
+///
+/// `number` - The finite field element.
+/// `word_list` - The word list.
 pub(crate) fn get_seed_phrase_for_element(
-    number: &FiniteFieldElement,
+    element: &FiniteFieldElement,
     word_list: &[&str],
 ) -> Result<SeedPhrase, Box<dyn Error>> {
-    get_seed_phrase_for_element_with_embedding(number, None, false, word_list)
+    get_seed_phrase_for_element_with_embedding(element, None, false, word_list)
 }
 
+/// The function converts a finite field element into a seed phrase.
+///
+/// In addition to the finite field element and the word list, the function further needs the
+/// index (if any) and the information whether the index is supposed to be embedded.
+/// An error is returend if the index must be embedded but no index is provided.
+///
+/// * `number` - The finite field element.
+/// * `index` - The index of the finite field element.
+/// * `embed_index` - Flag indicating whether the index is to be embedded.
+/// * `word_list` - The word list.
 pub(crate) fn get_seed_phrase_for_element_with_embedding(
     element: &FiniteFieldElement,
     index: Option<u32>,
@@ -219,7 +299,7 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
     encoded_words[..bytes.len()].clone_from_slice(&bytes[..]);
     // When embedding the index of the seed phrase, it is placed in the 4 higher-order bits
     // of the byte that holds the first byte of the hash.
-    // Since the index is at least 1, we subtract 1 so that we can use represent one more index.
+    // Since the index is at least 1, we subtract 1 so that we can use one more index.
     encoded_words[bytes.len()] = if embed_index {
         match index {
             Some(embedded_index) => (((embedded_index - 1) as u8) << 4) + (hash[0] % (1 << 4)),
@@ -237,7 +317,7 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
         .collect();
     // Return the seed phrase.
     if !embed_index {
-        // If the index is not embedded but there is an index, we need to provide it explicitly.
+        // If the index is not embedded but there is an index, it must be provided explicitly.
         match index {
             Some(embedded_index) => Ok(SeedPhrase::new_with_index(&words, embedded_index)),
             None => Ok(SeedPhrase::new(&words)),
@@ -247,24 +327,42 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
     }
 }
 
+/// The function returns the indices encoded in the given byte array.
+///
+/// The indices of the words are retrieved based on the BIP-0039 specification.
+///
+/// * `bytes` - The given byte array
+/// * `num_words` - The number of encoded words.
 fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, Box<dyn Error>> {
     let mut current_index: usize = 0;
     let mut read_bits = 0;
     let mut indices = vec![];
+    // Process every byte.
     for byte in bytes {
+        // If `NUM_BITS_PER_WORD` bits are read including the current byte, a new word index
+        // is computed.
         if read_bits + 8 >= NUM_BITS_PER_WORD {
+            // Keep track of the number of processed bits.
             let processed_bits = NUM_BITS_PER_WORD - read_bits;
+            // The remaining bits are used for the next index.
             let remaining_bits = 8 - processed_bits;
+            // Remove the remaining bits to get the processed part.
             let processed_part = (*byte as usize) >> remaining_bits;
+            // The current index is finalized by appending the processed part.
             current_index = (current_index << processed_bits) + processed_part;
+            // Add the index.
             indices.push(current_index);
-            let mask = (1 << remaining_bits) - 1;
-            current_index = (*byte as usize) & mask;
+            // Update the current index with the remaining bits.
+            current_index = (*byte as usize) % (1 << remaining_bits);
+            // The number of read bits is the number of remaining bits.
             read_bits = remaining_bits;
         } else {
+            // The whole byte is appended to the current index.
             current_index = (current_index << 8) + (*byte as usize);
+            // The number of read bytes increases by 8.
             read_bits += 8;
         }
+        // Once we have read the desired number of words, return them.
         if indices.len() == num_words {
             return Ok(indices);
         }
@@ -279,9 +377,14 @@ mod tests {
     use crate::word_list::DEFAULT_WORD_LIST;
     use rand::{seq::SliceRandom, Rng};
 
+    /// The number of valid key sizes is 5 (128, 160, 192, 224, 256).
     const NUM_VALID_KEY_SIZES: usize = 5;
+    /// The number of test runs.
     const NUM_TEST_RUNS: usize = 1000;
 
+    /// The function converts a Hex string into a series of bytes.
+    ///
+    /// * `input` - The input in the form of a Hex string.
     fn decode_hex_bytes(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         if input.len() % 2 != 0 {
             Err("Error decoding hex string: The input length is not a multiple of 2.".into())
@@ -294,20 +397,28 @@ mod tests {
     }
 
     #[test]
-    /// 01101011 10001011 01011101 11010010 10010110 00101101
-    /// 01101011100 01011010111 01110100101 00101100010
-    /// 860 727 933 354
-
-    /// 11100101 00011010 10110011 01101110 11010011 00100110 11010110
-    /// 11100101000 11010101100 11011011101 10100110010 01101101011
-    /// 1832 1708 1757 1330 875
+    /// A simple test function that tests the conversion from
+    ///      107      139       93      210      150       45
+    /// to
+    ///      107      139       93      210      150       45 =
+    /// 01101011 10001011 01011101 11010010 10010110 00101101 =
+    /// 01101011100 01011010111 01110100101 00101100010       =
+    ///         860         727         933         354
+    /// and from
+    ///      229       26      179      110      211       38      214
+    /// to
+    ///      229       26      179      110      211       38      214 =
+    /// 11100101 00011010 10110011 01101110 11010011 00100110 11010110 =
+    /// 11100101000 11010101100 11011011101 10100110010 01101101011    =
+    ///        1832        1708        1757        1330         875
     fn test_indices_from_bytes() {
+        // A test with 4 words.
         let num_words = 4;
         let bytes: &[u8] = &[107, 139, 93, 210, 150, 45];
         let indices = get_indices_from_bytes(bytes, num_words).unwrap();
         let expected_indices: Vec<usize> = vec![860, 727, 933, 354];
         assert_eq!(indices, expected_indices);
-
+        // A test with 5 words.
         let num_words = 5;
         let bytes: &[u8] = &[229, 26, 179, 110, 211, 38, 214];
         let indices = get_indices_from_bytes(bytes, num_words).unwrap();
@@ -317,6 +428,9 @@ mod tests {
 
     /// This function tests the conversion from a byte array to a seed phrase
     /// and vice versa.
+    ///
+    /// * `hex_number` - The input number as a Hex string.
+    /// * `phrase` - The corresponding seed phrase.
     fn test_seed_phrase_conversion_vector(hex_number: &str, phrase: &str) {
         // Obtain the bytes from the hexadecimal encoding.
         let value = decode_hex_bytes(hex_number).unwrap();
@@ -355,15 +469,16 @@ mod tests {
             let modulus = get_modulus_for_bits(size << 3).unwrap();
             let element = FiniteFieldElement::new(&random_key, &modulus);
             // Generate the seed phrase.
-            let mnemonic = get_seed_phrase_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+            let seed_phrase = get_seed_phrase_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
             // Derive the element from the seed phrase.
             let derived_element =
-                get_element_for_seed_phrase(&mnemonic, &DEFAULT_WORD_LIST).unwrap();
+                get_element_for_seed_phrase(&seed_phrase, &DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
         }
     }
 
+    /// Macro rules for the seed phrase conversion tests.
     macro_rules! tests {
         ($([$hex_number:expr, $phrase:expr]),*) => {
             #[test]
