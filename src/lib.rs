@@ -4,11 +4,11 @@
 //! The `harpo` crate provides functionality to secret-share seed phrases.
 //!
 //! The main functions that `harpo` provides are:
-//! * [create_secret_shared_seed_phrases](fn.create_secret_shared_seed_phrases.html):
+//! * [create_secret_shared_seed_phrases](crate::create_secret_shared_seed_phrases):
 //!   Given a seed phrase, create the requested number of
 //!   secret-shared seed phrases. A threshold must be provided as well, specifying how many
 //!   secret-shared seed phrases are required to reconstruct the original seed phrase.
-//! * [reconstruct_seed_phrase](fn.econstruct_seed_phrase.html): Given a set of
+//! * [reconstruct_seed_phrase](crate::reconstruct_seed_phrase): Given a set of
 //!   secret-shared seed phrases, the function
 //!   reconstruct a seed phrase.
 //!
@@ -44,6 +44,9 @@ use word_list::DEFAULT_WORD_LIST;
 /// seed phrase (12*11 = 132 bits to encode a secret of 128 bits).
 const MAX_EMBEDDED_SHARES: usize = 2 << NUM_BITS_FOR_INDEX;
 
+/// Every word list must have exactly this number of words.
+const NUM_WORDS_IN_LIST: usize = 2048;
+
 /// The function is called to create secret-shared seed phrases.
 ///
 /// Given a seed phrase, threshold, and total number of secret-shared seed phrases,
@@ -51,7 +54,7 @@ const MAX_EMBEDDED_SHARES: usize = 2 << NUM_BITS_FOR_INDEX;
 /// specified total number of seed phrases.
 /// Each returned seed phrase has an associated index, which can be embedded in the
 /// seed phrase itself or made available through the `index` field of
-/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+/// [SeedPhrase](crate::seed_phrase::SeedPhrase).
 /// The flag `embed_indices` is used to specify how to handle indices.
 ///
 /// * `seed_phrase` - The input seed phrase.
@@ -81,7 +84,7 @@ pub fn create_secret_shared_seed_phrases(
 /// specified total number of seed phrases.
 /// Each returned seed phrase has an associated index, which can be embedded in the
 /// seed phrase itself or made available through the `index` field of
-/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+/// [SeedPhrase](crate::seed_phrase::SeedPhrase).
 /// The flag `embed_indices` is used to specify how to handle indices.
 ///
 /// * `seed_phrase` - The input seed phrase.
@@ -96,6 +99,15 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     embed_indices: bool,
     word_list: &[&str],
 ) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+    // Make sure that the word list contains the right number of words:
+    if word_list.len() != NUM_WORDS_IN_LIST {
+        return Err(format!(
+            "The word list contains {} words instead of {}.",
+            word_list.len(),
+            NUM_WORDS_IN_LIST
+        )
+        .into());
+    }
     // Make sure that the threshold is not greater than the number of shares.
     if threshold > num_shares {
         return Err(
@@ -166,6 +178,15 @@ pub fn reconstruct_seed_phrase_for_word_list(
     seed_phrases: &[SeedPhrase],
     word_list: &[&str],
 ) -> Result<SeedPhrase, Box<dyn Error>> {
+    // Make sure that the word list contains the right number of words:
+    if word_list.len() != NUM_WORDS_IN_LIST {
+        return Err(format!(
+            "The word list contains {} words instead of {}.",
+            word_list.len(),
+            NUM_WORDS_IN_LIST
+        )
+        .into());
+    }
     // Ensure that all seed phrases have the same length and that the length is valid.
     if seed_phrases.is_empty() {
         return Err("No seed phrases provided.".into());
