@@ -1,7 +1,10 @@
 extern crate clap;
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use harpo::seed_phrase::{SeedPhrase, MIN_NUM_WORDS};
-use harpo::{create_secret_shared_seed_phrases, reconstruct_seed_phrase};
+use harpo::{
+    create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
+    reconstruct_seed_phrase, reconstruct_seed_phrase_for_word_list,
+};
 use std::error::Error;
 use std::fs::read_to_string;
 
@@ -86,14 +89,13 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
                 .help("Prints verbose output")
                 .takes_value(false),
         )
-        // Commented out until an implementation is added.
-        //.arg(
-        //    Arg::with_name("word-list") // A word-list file can be provided.
-        //        .short("w")
-        //        .long("word-list")
-        //        .help("Reads the word list from the provided file")
-        //        .takes_value(true),
-        //)
+        .arg(
+            Arg::with_name("word-list") // A word-list file can be provided.
+                .short("w")
+                .long("word-list")
+                .help("Reads the word list from the provided file")
+                .takes_value(true),
+        )
         .subcommand(create_subcommand) // Add the create subcommand.
         .subcommand(reconstruct_subcommand) // Add the reconstruct subcommand.
         .get_matches()
@@ -187,6 +189,7 @@ fn read_seed_phrase_interactively() -> Result<SeedPhrase, Box<dyn Error>> {
 fn handle_create(
     command_line: &clap::ArgMatches,
     verbose: bool,
+    word_list: Option<Vec<String>>,
 ) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
     // The unwrap() is okay because --num-shares must be provided.
     let num_shares = command_line
@@ -198,6 +201,7 @@ fn handle_create(
         .value_of("threshold")
         .unwrap()
         .parse::<usize>()?;
+    // Print verbose output if the flag --verbose is set.
     if verbose {
         println!(
             "Requested number of secret-shared seed phrases: {}",
@@ -226,7 +230,22 @@ fn handle_create(
             seed_phrase
         );
     }
-    create_secret_shared_seed_phrases(&seed_phrase, threshold, num_shares, embed_indices)
+    // Call the right library function.
+    match word_list {
+        Some(list) => {
+            let slice_list: Vec<&str> = list.iter().map(|s| s.as_str()).collect();
+            create_secret_shared_seed_phrases_for_word_list(
+                &seed_phrase,
+                threshold,
+                num_shares,
+                embed_indices,
+                &slice_list,
+            )
+        }
+        None => {
+            create_secret_shared_seed_phrases(&seed_phrase, threshold, num_shares, embed_indices)
+        }
+    }
 }
 
 /// The function reads multiple seed phrases from a file.
@@ -296,9 +315,11 @@ fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> 
 fn handle_reconstruct(
     command_line: &clap::ArgMatches,
     verbose: bool,
+    word_list: Option<Vec<String>>,
 ) -> Result<SeedPhrase, Box<dyn Error>> {
     // Read the input fropm a file or interactively.
     let seed_phrases = if let Some(file_path) = command_line.value_of("file") {
+        // Print verbose output if the flag --verbose is set.
         if verbose {
             println!("Reading seed phrases from {}...", file_path);
             println!();
@@ -319,7 +340,27 @@ fn handle_reconstruct(
         }
     }
     // Reconstruct the seed phrase.
-    reconstruct_seed_phrase(&seed_phrases)
+    match word_list {
+        Some(list) => {
+            let slice_list: Vec<&str> = list.iter().map(|s| s.as_str()).collect();
+            reconstruct_seed_phrase_for_word_list(&seed_phrases, &slice_list)
+        }
+        None => reconstruct_seed_phrase(&seed_phrases),
+    }
+}
+
+/// The function attempts to read a word list from the provided file path.
+///
+/// The function simply assumes that there is one word per line and builds a vector
+/// of strings accordingly. There is no verification that a proper word list is processed.
+///
+/// * `file_path` - The path to the file containing the word list.
+fn read_word_list_from_file(file_path: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    // Read the file content.
+    let file_content = read_to_string(file_path)?;
+    // Read the words, one per line.
+    let word_list: Vec<String> = file_content.lines().map(str::to_string).collect();
+    Ok(word_list)
 }
 
 /// The main function uses the command-line arguments to trigger the right command execution.
@@ -331,6 +372,22 @@ fn main() {
     let command_line = parse_command_line();
     // Check if the verbose flag is used.
     let verbose = command_line.is_present("verbose");
+    // If a path to a word-list file is provided, try to load it.
+    let word_list = match command_line.value_of("word-list") {
+        Some(file_path) => {
+            if verbose {
+                println!("Word list file: {}", file_path);
+            }
+            match read_word_list_from_file(file_path) {
+                Ok(list) => Some(list),
+                Err(error) => {
+                    println!("Error: {}", error);
+                    return;
+                }
+            }
+        }
+        None => None,
+    };
     // Trigger the right function based on the provided subcommand.
     match command_line.subcommand_name() {
         Some(CREATE_SUBCOMMAND) => {
@@ -339,6 +396,7 @@ fn main() {
                     .subcommand_matches(CREATE_SUBCOMMAND)
                     .expect("The 'create' command must be specififed."),
                 verbose,
+                word_list,
             ) {
                 Ok(seed_phrases) => {
                     println!();
@@ -357,6 +415,7 @@ fn main() {
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
                     .expect("Error: The 'create' command must be specififed."),
                 verbose,
+                word_list,
             ) {
                 Ok(seed_phrase) => {
                     println!();
