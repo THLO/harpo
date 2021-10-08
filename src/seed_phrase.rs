@@ -4,6 +4,7 @@
 
 use crate::math::FiniteFieldElement;
 use crate::secret_sharing::get_modulus_for_words;
+use crate::word_list::DEFAULT_WORD_LIST;
 use sha2::{Digest, Sha256};
 use std::cmp;
 use std::error::Error;
@@ -121,16 +122,26 @@ impl PartialEq for SeedPhrase {
 /// * `word` - The word that is looked up.
 /// * `word_list` - The list of words.
 fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
-    // Use a standard binary search to look for the word.
-    let mut left = 0;
-    let mut right = word_list.len() - 1;
-    while left <= right {
-        let mid = ((left + right) / 2) as usize;
-        match word_list[mid] {
-            w if w == word => return Some(mid),
-            w if w < word => left = mid + 1,
-            _ => right = mid - 1,
-        };
+    // Use a standard binary search to look for the word if it is the English word list.
+    // Otherwise, a linear search is used because string comparison fails when words contain
+    // diacritics.
+    if word_list[0] == DEFAULT_WORD_LIST[0] {
+        let mut left = 0;
+        let mut right = word_list.len() - 1;
+        while left <= right {
+            let mid = ((left + right) / 2) as usize;
+            match word_list[mid] {
+                w if w == word => return Some(mid),
+                w if w < word => left = mid + 1,
+                _ => right = mid - 1,
+            };
+        }
+    } else {
+        for (index, word) in word_list.iter().enumerate() {
+            if &word_list[index] == word {
+                return Some(index);
+            }
+        }
     }
     None
 }
@@ -374,7 +385,6 @@ fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, 
 mod tests {
     use super::*;
     use crate::secret_sharing::get_modulus_for_bits;
-    use crate::word_list::DEFAULT_WORD_LIST;
     use rand::{seq::SliceRandom, Rng};
 
     /// The number of valid key sizes is 5 (128, 160, 192, 224, 256).
