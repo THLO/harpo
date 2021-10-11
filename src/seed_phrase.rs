@@ -21,7 +21,7 @@ pub const NUM_BITS_FOR_INDEX: usize = 4;
 const ENTROPY_INCREMENT: usize = 32;
 
 /// This struct represents a seed phrase.
-#[derive(Eq)]
+#[derive(Eq, Debug)]
 pub struct SeedPhrase {
     words: Vec<String>,
     index: Option<u32>,
@@ -164,6 +164,62 @@ pub(crate) fn get_element_for_seed_phrase(
     Ok(element)
 }
 
+// The function returns the index list for a given seed phrase.
+//
+// * `seed_phrase` - The seed phrase.
+/// * `word_list` - The word list.
+fn get_index_list(
+    seed_phrase: &SeedPhrase,
+    word_list: &[&str],
+) -> Result<Vec<usize>, Box<dyn Error>> {
+    let mut index_list: Vec<usize> = vec![];
+    // Iterate through all the words and get the index, if available.
+    for word in seed_phrase.get_words() {
+        match get_index(word, word_list) {
+            Some(index) => index_list.push(index),
+            None => return Err(format!("Invalid word in the seed phrase: {}", word).into()),
+        };
+    }
+    Ok(index_list)
+}
+
+// The function checks BIP-0039 compliance of the seed phrase.
+//
+// The function checks whether the last word is the expected word according to the BIP-0039
+// specification by examining the hash bits.
+//
+// * `seed_phrase` - The seed phrase.
+pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool {
+    // The words are mapped to their indices in the word list.
+    let index_list_result = get_index_list(seed_phrase, word_list);
+    match index_list_result {
+        Ok(index_list) => {
+            // Convert the indices into a byte array.
+            let bytes = get_bytes_from_indices(&index_list);
+            // The number of bytes used to build the element is a multiple of 32 bits = 4 bytes.
+            let num_used_bytes = (bytes.len() >> 2) << 2;
+            // Copy the bytes into a new array.
+            let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
+            used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
+            // Hash the bytes and verify if the remaining bits match to ensure that the input is a
+            // BIP-0039 compliant seed phrase.
+            let mut hasher = Sha256::new();
+            hasher.update(&used_bytes);
+            let hash = hasher.finalize();
+            // The number of words.
+            let num_words = seed_phrase.len();
+            // The number of hash bits that are used.
+            let num_hash_bits = NUM_BITS_PER_WORD * num_words - (num_used_bytes << 3);
+            let num_zero_bits = 8 - num_hash_bits;
+            // Set the unused bits to zero.
+            let hash_byte = (hash[0] >> num_zero_bits) << num_zero_bits;
+            // The seed phrase is valid if the hash bytes match the left-over byte.
+            hash_byte == bytes[num_used_bytes]
+        }
+        Err(_) => false,
+    }
+}
+
 /// The function returns the finite field element and index encoded in the given seed phrase.
 ///
 /// Given a seed phrase and a word list, the words are turned into numbers, corresponding to their
@@ -181,17 +237,11 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
     if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
         return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
     }
-    // The words are mapped to their indices in the word list:
-    let mut index_list: Vec<usize> = vec![];
-    for word in seed_phrase.get_words() {
-        match get_index(word, word_list) {
-            Some(index) => index_list.push(index),
-            None => return Err(format!("Invalid word '{}' found.", word).into()),
-        };
-    }
+    // The words are mapped to their indices in the word list.
+    let index_list = get_index_list(seed_phrase, word_list)?;
     // Convert the indices into a byte array.
     let bytes = get_bytes_from_indices(&index_list);
-    // The number of bytes used to build the element is a multiple of 32 bit = 4 bytes.
+    // The number of bytes used to build the element is a multiple of 32 bits = 4 bytes.
     let num_used_bytes = (bytes.len() >> 2) << 2;
     // Copy the bytes into a new array.
     let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
