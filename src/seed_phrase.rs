@@ -10,9 +10,6 @@ use std::cmp;
 use std::error::Error;
 use std::fmt;
 
-/// The minimum number of words in a seed phrase.
-pub const MIN_NUM_WORDS: usize = 12;
-
 /// The number of bits that each word represents.
 const NUM_BITS_PER_WORD: usize = 11;
 /// The number of bits used to encode an index.
@@ -21,9 +18,13 @@ pub const NUM_BITS_FOR_INDEX: usize = 4;
 const ENTROPY_INCREMENT: usize = 32;
 
 /// This struct represents a seed phrase.
+/// A seed phrase consists of a series of words and, optionally, an index.
+/// The index is used to reconstruct secret-shared seed phrases.
 #[derive(Eq, Debug)]
 pub struct SeedPhrase {
+    /// The words.
     words: Vec<String>,
+    /// The optional index.
     index: Option<u32>,
 }
 
@@ -88,7 +89,7 @@ impl SeedPhrase {
 }
 
 impl fmt::Display for SeedPhrase {
-    /// A seed phrase is displayed as a comma-delmited string.
+    /// A seed phrase is displayed as a space-delimited string.
     /// If it has an associated index, the index followed by a colon is prepended to the
     /// list of words.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -201,8 +202,7 @@ pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool
             // Copy the bytes into a new array.
             let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
             used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
-            // Hash the bytes and verify if the remaining bits match to ensure that the input is a
-            // BIP-0039 compliant seed phrase.
+            // Compute the SHA-256 hash of the bytes.
             let mut hasher = Sha256::new();
             hasher.update(&used_bytes);
             let hash = hasher.finalize();
@@ -431,6 +431,8 @@ fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, 
     Err("Error parsing indices from byte array.".into())
 }
 
+// ******************************** TESTS ********************************
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,7 +466,9 @@ mod tests {
     /// 01101011 10001011 01011101 11010010 10010110 00101101 =
     /// 01101011100 01011010111 01110100101 00101100010       =
     ///         860         727         933         354
+    ///
     /// and from
+    ///
     ///      229       26      179      110      211       38      214
     /// to
     ///      229       26      179      110      211       38      214 =
