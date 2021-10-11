@@ -280,7 +280,6 @@ mod tests {
         let seed_phrases = [first_seed_phrase, second_seed_phrase];
         // Reconstruct the seed phrase.
         let seed_phrase = reconstruct_seed_phrase(&seed_phrases);
-        println!("Result: {:?}", seed_phrase);
         // Assert that a seed phrase is returned.
         assert!(seed_phrase.is_ok());
         // Assert that it matches the expected seed phrase.
