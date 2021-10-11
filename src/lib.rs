@@ -31,8 +31,8 @@ mod word_list;
 use secret_sharing::{reconstruct_secret, SecretPolynomial, SecretShare};
 use seed_phrase::{
     get_element_and_index_for_seed_phrase, get_element_for_seed_phrase,
-    get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, SeedPhrase,
-    NUM_BITS_FOR_INDEX,
+    get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, is_compliant,
+    SeedPhrase, NUM_BITS_FOR_INDEX,
 };
 use std::collections::HashSet;
 use std::error::Error;
@@ -99,6 +99,10 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     embed_indices: bool,
     word_list: &[&str],
 ) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+    // Make sure that the seed phrase is BIP-0039 compliant.
+    if !is_compliant(seed_phrase, word_list) {
+        return Err("The seed phrase is invalid.".into());
+    }
     // Make sure that the word list contains the right number of words:
     if word_list.len() != NUM_WORDS_IN_LIST {
         return Err(format!(
@@ -213,5 +217,83 @@ pub fn reconstruct_seed_phrase_for_word_list(
         let secret_element = reconstruct_secret(&secret_shares);
         // Turn the secret element into a seed phrase.
         get_seed_phrase_for_element(&secret_element, word_list)
+    }
+}
+
+// ******************************** TESTS ********************************
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    /// The function provides basic tests for the create function.
+    fn test_create_secret_shared_seed_phrases() {
+        let words = [
+            "legal", "winner", "thank", "year", "wave", "sausage", "worth", "useful", "legal",
+            "winner", "thank", "yellow",
+        ];
+        let seed_phrase =
+            SeedPhrase::new(&words.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+        let seed_phrases = create_secret_shared_seed_phrases(&seed_phrase, 2, 3, true);
+        // Assert that there are seed phrases.
+        assert!(seed_phrases.is_ok());
+        // Assert that the right number of seed phrases is returned.
+        assert_eq!(seed_phrases.unwrap().len(), 3);
+        // Change the last word, making it an invalid seed phrase.
+        let words = [
+            "legal", "winner", "thank", "year", "wave", "sausage", "worth", "useful", "legal",
+            "winner", "thank", "above",
+        ];
+        let seed_phrase =
+            SeedPhrase::new(&words.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+        let seed_phrases = create_secret_shared_seed_phrases(&seed_phrase, 2, 3, true);
+        // Assert that an error is returned.
+        assert!(seed_phrases.is_err());
+    }
+
+    #[test]
+    /// The function provides basic tests for the reconstruct function.
+    fn test_reconstruct_seed_phrase() {
+        // Create two seed phrases.
+        let first_words = [
+            "coil", "reunion", "immune", "ignore", "custom", "gallery", "dutch", "trouble",
+            "snake", "ball", "wrong", "bike",
+        ];
+        let second_words = [
+            "stable", "biology", "key", "post", "fiction", "concert", "hill", "step", "vibrant",
+            "ocean", "punch", "car",
+        ];
+        let first_seed_phrase = SeedPhrase::new(
+            &first_words
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>(),
+        );
+        let second_seed_phrase = SeedPhrase::new(
+            &second_words
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>(),
+        );
+
+        let seed_phrases = [first_seed_phrase, second_seed_phrase];
+        // Reconstruct the seed phrase.
+        let seed_phrase = reconstruct_seed_phrase(&seed_phrases);
+        println!("Result: {:?}", seed_phrase);
+        // Assert that a seed phrase is returned.
+        assert!(seed_phrase.is_ok());
+        // Assert that it matches the expected seed phrase.
+        let expected_words = [
+            "letter", "advice", "cage", "absurd", "amount", "doctor", "acoustic", "avoid",
+            "letter", "advice", "cage", "above",
+        ];
+        let expected_seed_phrase = SeedPhrase::new(
+            &expected_words
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>(),
+        );
+        assert_eq!(seed_phrase.unwrap(), expected_seed_phrase);
     }
 }
