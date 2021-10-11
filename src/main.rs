@@ -1,6 +1,6 @@
 extern crate clap;
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use harpo::seed_phrase::{SeedPhrase, MIN_NUM_WORDS};
+use harpo::seed_phrase::SeedPhrase;
 use harpo::{
     create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
     reconstruct_seed_phrase, reconstruct_seed_phrase_for_word_list,
@@ -109,7 +109,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
 /// Note that the function does not verify the validity of the provided words.
 ///
 /// * `input` - The input seed phrase as a space-delimited string.
-fn convert_string_to_seed_phrase(input: &str) -> Option<SeedPhrase> {
+fn convert_string_to_seed_phrase(input: &str) -> Result<SeedPhrase, Box<dyn Error>> {
     // Break the input into words.
     let mut words: Vec<String> = input
         .replace(':', ": ") // If there is an index, ensure that it is a separate word.
@@ -119,20 +119,20 @@ fn convert_string_to_seed_phrase(input: &str) -> Option<SeedPhrase> {
         .filter(|word| !word.is_empty()) // Keep only words with a positive length.
         .map(str::to_string) // Map the string slices to strings.
         .collect(); // Collect the vector.
-    if words.len() < MIN_NUM_WORDS {
+    if words.is_empty() {
         // Make sure that there are sufficiently many words.
-        return None;
+        return Err("No seed phrase provided.".into());
     }
     // If there is an explicit index, extract it from the list of words.
     if words[0].contains(':') {
         let index_string = words.remove(0);
         match index_string.replace(":", "").parse::<u32>() {
-            Ok(index) => Some(SeedPhrase::new_with_index(&words, index)),
-            Err(_) => None,
+            Ok(index) => Ok(SeedPhrase::new_with_index(&words, index)),
+            Err(_) => Err("Could not parse index of seed phrase.".into()),
         }
     } else {
         // Otherwise, create a seed phrase without an index.
-        Some(SeedPhrase::new(&words))
+        Ok(SeedPhrase::new(&words))
     }
 }
 
@@ -151,10 +151,7 @@ fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Err
         .find(|line| !line.starts_with('#') && !line.is_empty());
     // If a seed phrase is found, turn the string into a SeedPhrase struct and return it.
     match seed_phrase_string {
-        Some(seed_phrase_string) => match convert_string_to_seed_phrase(seed_phrase_string) {
-            Some(seed_phrase) => Ok(seed_phrase),
-            None => Err("Could not convert the input into a seed phrase.".into()),
-        },
+        Some(seed_phrase_string) => convert_string_to_seed_phrase(seed_phrase_string),
         None => Err(format!(
             "Could not read the seed phrase from the file {}.",
             file_path
@@ -173,10 +170,7 @@ fn read_seed_phrase_interactively() -> Result<SeedPhrase, Box<dyn Error>> {
     // Read from standard input.
     let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
     // If the input can be converted to a seed phrase, return the seed phrase.
-    match convert_string_to_seed_phrase(&seed_phrase_string) {
-        Some(seed_phrase) => Ok(seed_phrase),
-        None => Err("Could not parse the seed phrase.".into()),
-    }
+    convert_string_to_seed_phrase(&seed_phrase_string)
 }
 
 /// The function handles the creation of secret-shared seed phrases.
@@ -259,13 +253,13 @@ fn read_seed_phrases_from_file(file_path: &str) -> Result<Vec<SeedPhrase>, Box<d
     // Read the file content.
     let file_content = read_to_string(file_path)?;
     // Get all potential seed phrases.
-    let seed_phrase_options: Vec<Option<SeedPhrase>> = file_content
+    let seed_phrase_options: Vec<Result<SeedPhrase, Box<dyn Error>>> = file_content
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
         .map(|line| convert_string_to_seed_phrase(line))
         .collect();
     // If there is a 'None' entry, return an error.
-    if seed_phrase_options.iter().any(|option| option.is_none()) {
+    if seed_phrase_options.iter().any(|option| option.is_err()) {
         Err("Encountered an invalid seed phrase in the file.".into())
     } else {
         // Otherwise, remove the 'None' entries and return the seed phrases.
@@ -287,15 +281,15 @@ fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> 
     println!("Please enter the first secret-shared seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
     let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
     match convert_string_to_seed_phrase(&seed_phrase_string) {
-        Some(seed_phrase) => seed_phrases.push(seed_phrase),
-        None => return Err("Could not convert the input into a seed phrase.".into()),
+        Ok(seed_phrase) => seed_phrases.push(seed_phrase),
+        Err(e) => return Err(e),
     }
     seed_phrase_string.clear();
     // Read the next seed phrase from standard input.
     println!();
     println!("Please enter the next secret-shared seed phrase (press enter when done):");
     let _ = std::io::stdin().read_line(&mut seed_phrase_string)?;
-    while let Some(seed_phrase) = convert_string_to_seed_phrase(&seed_phrase_string) {
+    while let Ok(seed_phrase) = convert_string_to_seed_phrase(&seed_phrase_string) {
         seed_phrases.push(seed_phrase);
         seed_phrase_string.clear();
         println!();
@@ -381,7 +375,7 @@ fn main() {
             match read_word_list_from_file(file_path) {
                 Ok(list) => Some(list),
                 Err(error) => {
-                    println!("Error: {}", error);
+                    eprintln!("Error: {}", error);
                     return;
                 }
             }
@@ -406,7 +400,10 @@ fn main() {
                         println!("{}", seed_phrase);
                     }
                 }
-                Err(err) => println!("Error: {}", err),
+                Err(err) => {
+                    println!();
+                    eprintln!("Error: {}", err);
+                }
             };
         }
         Some(RECONSTRUCT_SUBCOMMAND) => {
@@ -423,9 +420,12 @@ fn main() {
                     println!("--------------------------");
                     println!("{}", seed_phrase)
                 }
-                Err(err) => println!("Error: {}", err),
+                Err(err) => {
+                    println!();
+                    eprintln!("Error: {}", err);
+                }
             };
         }
-        _ => println!("Error: A subcommand must be provided. Use --help to view options."),
+        _ => eprintln!("Error: A subcommand must be provided. Use --help to view options."),
     };
 }
