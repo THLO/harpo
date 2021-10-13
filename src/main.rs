@@ -3,9 +3,9 @@ use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use harpo::seed_phrase::SeedPhrase;
 use harpo::{
     create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
-    reconstruct_seed_phrase, reconstruct_seed_phrase_for_word_list,
+    reconstruct_seed_phrase, reconstruct_seed_phrase_for_word_list, HarpoError, HarpoResult,
+    SeedPhraseResult,
 };
-use std::error::Error;
 use std::fs::read_to_string;
 
 /// The subcommand to create secret shares.
@@ -109,7 +109,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
 /// Note that the function does not verify the validity of the provided words.
 ///
 /// * `input` - The input seed phrase as a space-delimited string.
-fn convert_string_to_seed_phrase(input: &str) -> Result<SeedPhrase, Box<dyn Error>> {
+fn convert_string_to_seed_phrase(input: &str) -> SeedPhraseResult {
     // Break the input into words.
     let mut words: Vec<String> = input
         .replace(':', ": ") // If there is an index, ensure that it is a separate word.
@@ -121,14 +121,18 @@ fn convert_string_to_seed_phrase(input: &str) -> Result<SeedPhrase, Box<dyn Erro
         .collect(); // Collect the vector.
     if words.is_empty() {
         // Make sure that there are sufficiently many words.
-        return Err("No seed phrase provided.".into());
+        return Err(HarpoError::InvalidSeedPhrase(
+            "No seed phrase provided.".to_string(),
+        ));
     }
     // If there is an explicit index, extract it from the list of words.
     if words[0].contains(':') {
         let index_string = words.remove(0);
         match index_string.replace(":", "").parse::<u32>() {
             Ok(index) => Ok(SeedPhrase::new_with_index(&words, index)),
-            Err(_) => Err("Could not parse index of seed phrase.".into()),
+            Err(_) => Err(HarpoError::InvalidSeedPhrase(
+                "Could not parse index of seed phrase.".to_string(),
+            )),
         }
     } else {
         // Otherwise, create a seed phrase without an index.
@@ -142,7 +146,7 @@ fn convert_string_to_seed_phrase(input: &str) -> Result<SeedPhrase, Box<dyn Erro
 /// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if possible.
 ///
 /// * `file_path` - The path to the file containing the seed phrase.
-fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Error>> {
+fn read_seed_phrase_from_file(file_path: &str) -> SeedPhraseResult {
     // Read the file content.
     let file_content = read_to_string(file_path)?;
     // Find a line that might encode a seed phrase.
@@ -152,11 +156,10 @@ fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Err
     // If a seed phrase is found, turn the string into a SeedPhrase struct and return it.
     match seed_phrase_string {
         Some(seed_phrase_string) => convert_string_to_seed_phrase(seed_phrase_string),
-        None => Err(format!(
+        None => Err(HarpoError::InvalidSeedPhrase(format!(
             "Could not read the seed phrase from the file {}.",
             file_path
-        )
-        .into()),
+        ))),
     }
 }
 
@@ -164,7 +167,7 @@ fn read_seed_phrase_from_file(file_path: &str) -> Result<SeedPhrase, Box<dyn Err
 ///
 /// The function reads a line from standard input and returns it as a
 /// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if possible.
-fn read_seed_phrase_interactively() -> Result<SeedPhrase, Box<dyn Error>> {
+fn read_seed_phrase_interactively() -> SeedPhraseResult {
     let mut seed_phrase_string = String::new();
     println!("Please enter your seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
     // Read from standard input.
@@ -184,7 +187,7 @@ fn handle_create(
     command_line: &clap::ArgMatches,
     verbose: bool,
     word_list: Option<Vec<String>>,
-) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+) -> HarpoResult<Vec<SeedPhrase>> {
     // The unwrap() is okay because --num-shares must be provided.
     let num_shares = command_line
         .value_of("num-shares")
@@ -249,18 +252,20 @@ fn handle_create(
 /// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) is returned.
 ///
 /// * `file_path` - The path to the file containing the seed phrases.
-fn read_seed_phrases_from_file(file_path: &str) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+fn read_seed_phrases_from_file(file_path: &str) -> HarpoResult<Vec<SeedPhrase>> {
     // Read the file content.
     let file_content = read_to_string(file_path)?;
     // Get all potential seed phrases.
-    let seed_phrase_options: Vec<Result<SeedPhrase, Box<dyn Error>>> = file_content
+    let seed_phrase_options: Vec<SeedPhraseResult> = file_content
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
         .map(|line| convert_string_to_seed_phrase(line))
         .collect();
     // If there is a 'None' entry, return an error.
     if seed_phrase_options.iter().any(|option| option.is_err()) {
-        Err("Encountered an invalid seed phrase in the file.".into())
+        Err(HarpoError::InvalidSeedPhrase(
+            "Encountered an invalid seed phrase in the file.".to_string(),
+        ))
     } else {
         // Otherwise, remove the 'None' entries and return the seed phrases.
         Ok(seed_phrase_options
@@ -274,7 +279,7 @@ fn read_seed_phrases_from_file(file_path: &str) -> Result<Vec<SeedPhrase>, Box<d
 ///
 /// The function reads lines from standard input and returns all collected seed phrases in a
 /// vector of [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) struct if possible.
-fn read_seed_phrases_interactively() -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+fn read_seed_phrases_interactively() -> HarpoResult<Vec<SeedPhrase>> {
     let mut seed_phrases = vec![];
     let mut seed_phrase_string = String::new();
     // Read the first seed phrase from standard input.
@@ -310,7 +315,7 @@ fn handle_reconstruct(
     command_line: &clap::ArgMatches,
     verbose: bool,
     word_list: Option<Vec<String>>,
-) -> Result<SeedPhrase, Box<dyn Error>> {
+) -> SeedPhraseResult {
     // Read the input fropm a file or interactively.
     let seed_phrases = if let Some(file_path) = command_line.value_of("file") {
         // Print verbose output if the flag --verbose is set.
@@ -349,7 +354,7 @@ fn handle_reconstruct(
 /// of strings accordingly. There is no verification that a proper word list is processed.
 ///
 /// * `file_path` - The path to the file containing the word list.
-fn read_word_list_from_file(file_path: &str) -> Result<Vec<String>, Box<dyn Error>> {
+fn read_word_list_from_file(file_path: &str) -> HarpoResult<Vec<String>> {
     // Read the file content.
     let file_content = read_to_string(file_path)?;
     // Read the words, one per line.
@@ -375,7 +380,7 @@ fn main() {
             match read_word_list_from_file(file_path) {
                 Ok(list) => Some(list),
                 Err(error) => {
-                    eprintln!("Error: {}", error);
+                    eprintln!("{}", error);
                     return;
                 }
             }
@@ -402,7 +407,7 @@ fn main() {
                 }
                 Err(err) => {
                     println!();
-                    eprintln!("Error: {}", err);
+                    eprintln!("{}", err);
                 }
             };
         }
@@ -422,7 +427,7 @@ fn main() {
                 }
                 Err(err) => {
                     println!();
-                    eprintln!("Error: {}", err);
+                    eprintln!("{}", err);
                 }
             };
         }

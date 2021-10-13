@@ -35,7 +35,7 @@ use seed_phrase::{
     SeedPhrase, NUM_BITS_FOR_INDEX,
 };
 use std::collections::HashSet;
-use std::error::Error;
+use std::fmt::Display;
 use word_list::DEFAULT_WORD_LIST;
 
 /// The maximum number of shares that can be embedded.
@@ -46,6 +46,61 @@ const MAX_EMBEDDED_SHARES: usize = 2 << NUM_BITS_FOR_INDEX;
 
 /// Every word list must have exactly this number of words.
 const NUM_WORDS_IN_LIST: usize = 2048;
+
+/// This enumeration type is returned by the main library functions if there is an error.
+#[derive(Debug)]
+pub enum HarpoError {
+    /// This variant is used if the error relates to a seed phrase.
+    InvalidSeedPhrase(String),
+    /// This variant is used if the error relates to a parameter.
+    InvalidParameter(String),
+    /// This variant is used if there is an I/O error.
+    IoError(std::io::Error),
+    /// This variant is used if there is an error parsing an integer.
+    ParseIntError(std::num::ParseIntError),
+}
+
+impl Display for HarpoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HarpoError::InvalidSeedPhrase(message) => {
+                write!(f, "Invalid seed phrase error: {}", message)
+            }
+            HarpoError::InvalidParameter(message) => {
+                write!(f, "Invalid parameter error: {}", message)
+            }
+            HarpoError::IoError(error) => write!(f, "IO error: {}", error),
+            HarpoError::ParseIntError(error) => write!(f, "Parsing error: {}", error),
+        }
+    }
+}
+
+impl From<std::io::Error> for HarpoError {
+    /// The function defines how an [IO error](std::io::Error) is mapped to a
+    /// [HarpoError](crate::HarpoError).
+    ///
+    /// * `err` - The IO error.
+    fn from(err: std::io::Error) -> Self {
+        HarpoError::IoError(err)
+    }
+}
+
+impl From<std::num::ParseIntError> for HarpoError {
+    /// The function defines how a [parse int error](std::num::ParseIntError) is mapped to a
+    /// [HarpoError](crate::HarpoError).
+    ///
+    /// * `err` - The IO error.
+    fn from(err: std::num::ParseIntError) -> Self {
+        HarpoError::ParseIntError(err)
+    }
+}
+
+/// A result that contains a [HarpoError](crate::HarpoError) in the `Err` case.
+pub type HarpoResult<R> = Result<R, HarpoError>;
+
+/// A [HarpoResult](crate::HarpoResult) that encapsulates a
+/// [SeedPhrase](crate::seed_phrase::SeedPhrase) in the `Ok` case.
+pub type SeedPhraseResult = HarpoResult<SeedPhrase>;
 
 /// The function is called to create secret-shared seed phrases.
 ///
@@ -66,7 +121,7 @@ pub fn create_secret_shared_seed_phrases(
     threshold: usize,
     num_seed_phrases: usize,
     embed_indices: bool,
-) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
+) -> HarpoResult<Vec<SeedPhrase>> {
     // Create the seed phrases using the default word list.
     create_secret_shared_seed_phrases_for_word_list(
         seed_phrase,
@@ -98,38 +153,40 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     num_shares: usize,
     embed_indices: bool,
     word_list: &[&str],
-) -> Result<Vec<SeedPhrase>, Box<dyn Error>> {
-    // Make sure that the seed phrase is BIP-0039 compliant.
-    if !is_compliant(seed_phrase, word_list) {
-        return Err("The seed phrase is invalid.".into());
-    }
+) -> HarpoResult<Vec<SeedPhrase>> {
     // Make sure that the word list contains the right number of words:
     if word_list.len() != NUM_WORDS_IN_LIST {
-        return Err(format!(
+        return Err(HarpoError::InvalidSeedPhrase(format!(
             "The word list contains {} words instead of {}.",
             word_list.len(),
             NUM_WORDS_IN_LIST
-        )
-        .into());
+        )));
     }
     // Make sure that the threshold is not greater than the number of shares.
     if threshold > num_shares {
-        return Err(
-            "The threshold must not exceed the number of secret-shared seed phrases.".into(),
-        );
+        return Err(HarpoError::InvalidParameter(
+            "The threshold must not exceed the number of secret-shared seed phrases.".to_string(),
+        ));
     }
     // Make sure that the threshold at least 1.
     if threshold < 1 {
-        return Err("The threshold must be at least 1.".into());
+        return Err(HarpoError::InvalidParameter(
+            "The threshold must be at least 1.".to_string(),
+        ));
     }
     // Embedding is only possible if there are at most `MAX_EMBEDDED_SHARES` shares.
     if num_shares > MAX_EMBEDDED_SHARES && embed_indices {
-        return Err(format!(
+        return Err(HarpoError::InvalidParameter(format!(
             "Only {} secret-shared pass phrases can be created with embedded indices.\n\
             Use a smaller number of shares or turn of index embedding ('--no-embedding').",
             MAX_EMBEDDED_SHARES
-        )
-        .into());
+        )));
+    }
+    // Make sure that the seed phrase is BIP-0039 compliant.
+    if !is_compliant(seed_phrase, word_list) {
+        return Err(HarpoError::InvalidSeedPhrase(
+            "The seed phrase is not BIP-0039 compliant.".to_string(),
+        ));
     }
     // Turn the seed_phrase into a finite field element.
     let secret = get_element_for_seed_phrase(seed_phrase, word_list)?;
@@ -155,7 +212,9 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
             }
             Ok(seed_phrases)
         }
-        None => Err("Could not instantiate the required secret polynomial.".into()),
+        None => Err(HarpoError::InvalidParameter(
+            "Could not instantiate the required secret polynomial.".to_string(),
+        )),
     }
 }
 
@@ -166,7 +225,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
 ///
 /// * `seed_phrases` - The input seed phrases.
 /// * `word_list` - The word list for the seed phrases.
-pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> Result<SeedPhrase, Box<dyn Error>> {
+pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> SeedPhraseResult {
     // Reconstruct the seed phrase using the default word list.
     reconstruct_seed_phrase_for_word_list(seed_phrases, &DEFAULT_WORD_LIST)
 }
@@ -181,26 +240,31 @@ pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> Result<SeedPhrase
 pub fn reconstruct_seed_phrase_for_word_list(
     seed_phrases: &[SeedPhrase],
     word_list: &[&str],
-) -> Result<SeedPhrase, Box<dyn Error>> {
+) -> SeedPhraseResult {
     // Make sure that the word list contains the right number of words:
     if word_list.len() != NUM_WORDS_IN_LIST {
-        return Err(format!(
+        return Err(HarpoError::InvalidSeedPhrase(format!(
             "The word list contains {} words instead of {}.",
             word_list.len(),
             NUM_WORDS_IN_LIST
-        )
-        .into());
+        )));
     }
     // Ensure that all seed phrases have the same length and that the length is valid.
     if seed_phrases.is_empty() {
-        return Err("No seed phrases provided.".into());
+        return Err(HarpoError::InvalidSeedPhrase(
+            "No seed phrases provided.".to_string(),
+        ));
     }
     let num_words = seed_phrases[0].len();
     if !(12..=24).contains(&num_words) || num_words % 3 != 0 {
-        return Err("Invalid number of words.".into());
+        return Err(HarpoError::InvalidSeedPhrase(
+            "Invalid number of words.".to_string(),
+        ));
     }
     if seed_phrases.iter().any(|code| code.len() != num_words) {
-        Err("Found seed phrases with different lengths.".into())
+        Err(HarpoError::InvalidSeedPhrase(
+            "Found seed phrases with different lengths.".to_string(),
+        ))
     } else {
         // Get the corresponding secret shares.
         let mut secret_shares = vec![];

@@ -5,9 +5,9 @@
 use crate::math::FiniteFieldElement;
 use crate::secret_sharing::get_modulus_for_words;
 use crate::word_list::DEFAULT_WORD_LIST;
+use crate::{HarpoError, HarpoResult, SeedPhraseResult};
 use sha2::{Digest, Sha256};
 use std::cmp;
-use std::error::Error;
 use std::fmt;
 
 /// The number of bits that each word represents.
@@ -158,7 +158,7 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
 pub(crate) fn get_element_for_seed_phrase(
     seed_phrase: &SeedPhrase,
     word_list: &[&str],
-) -> Result<FiniteFieldElement, Box<dyn Error>> {
+) -> HarpoResult<FiniteFieldElement> {
     // Get the element and discard the index.
     let (element, _) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
     // Return the corresponding finite field element.
@@ -169,16 +169,25 @@ pub(crate) fn get_element_for_seed_phrase(
 //
 // * `seed_phrase` - The seed phrase.
 /// * `word_list` - The word list.
-fn get_index_list(
-    seed_phrase: &SeedPhrase,
-    word_list: &[&str],
-) -> Result<Vec<usize>, Box<dyn Error>> {
+fn get_index_list(seed_phrase: &SeedPhrase, word_list: &[&str]) -> HarpoResult<Vec<usize>> {
+    // Verify that the seed phrase has a permissible number of words.
+    let num_words = seed_phrase.len();
+    if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
+        return Err(HarpoError::InvalidParameter(
+            "The number of words must be 12, 15, 18, 21, or 24.".to_string(),
+        ));
+    }
     let mut index_list: Vec<usize> = vec![];
     // Iterate through all the words and get the index, if available.
     for word in seed_phrase.get_words() {
         match get_index(word, word_list) {
             Some(index) => index_list.push(index),
-            None => return Err(format!("Invalid word in the seed phrase: {}", word).into()),
+            None => {
+                return Err(HarpoError::InvalidSeedPhrase(format!(
+                    "Invalid word in the seed phrase: {}",
+                    word
+                )))
+            }
         };
     }
     Ok(index_list)
@@ -232,11 +241,7 @@ pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool
 pub(crate) fn get_element_and_index_for_seed_phrase(
     seed_phrase: &SeedPhrase,
     word_list: &[&str],
-) -> Result<(FiniteFieldElement, u32), Box<dyn Error>> {
-    let num_words = seed_phrase.len();
-    if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
-        return Err("The number of words must be 12, 15, 18, 21, or 24.".into());
-    }
+) -> HarpoResult<(FiniteFieldElement, u32)> {
     // The words are mapped to their indices in the word list.
     let index_list = get_index_list(seed_phrase, word_list)?;
     // Convert the indices into a byte array.
@@ -246,6 +251,8 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
     // Copy the bytes into a new array.
     let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
     used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
+    // Get the number of words.
+    let num_words = seed_phrase.len();
     // Get the modulus. Calling unwrap() is okay here because the number of words is checked
     // at the beginning of the function call.
     let modulus = get_modulus_for_words(num_words).unwrap();
@@ -321,7 +328,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
 pub(crate) fn get_seed_phrase_for_element(
     element: &FiniteFieldElement,
     word_list: &[&str],
-) -> Result<SeedPhrase, Box<dyn Error>> {
+) -> SeedPhraseResult {
     get_seed_phrase_for_element_with_embedding(element, None, false, word_list)
 }
 
@@ -340,10 +347,12 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
     index: Option<u32>,
     embed_index: bool,
     word_list: &[&str],
-) -> Result<SeedPhrase, Box<dyn Error>> {
+) -> SeedPhraseResult {
     // Ensure that there is an index if it is to be embedded.
     if embed_index && index.is_none() {
-        return Err("Error no index is provided to embed in the seed phrase.".into());
+        return Err(HarpoError::InvalidParameter(
+            "No index is provided to embed in the seed phrase.".into(),
+        ));
     }
     // Get the bytes.
     let bytes = element.get_bytes();
@@ -394,7 +403,7 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
 ///
 /// * `bytes` - The given byte array
 /// * `num_words` - The number of encoded words.
-fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, Box<dyn Error>> {
+fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> HarpoResult<Vec<usize>> {
     let mut current_index: usize = 0;
     let mut read_bits = 0;
     let mut indices = vec![];
@@ -428,7 +437,9 @@ fn get_indices_from_bytes(bytes: &[u8], num_words: usize) -> Result<Vec<usize>, 
             return Ok(indices);
         }
     }
-    Err("Error parsing indices from byte array.".into())
+    Err(HarpoError::InvalidSeedPhrase(
+        "Error parsing indices from byte array.".to_string(),
+    ))
 }
 
 // ******************************** TESTS ********************************
@@ -438,6 +449,7 @@ mod tests {
     use super::*;
     use crate::secret_sharing::get_modulus_for_bits;
     use rand::{seq::SliceRandom, Rng};
+    use std::error::Error;
 
     /// The number of valid key sizes is 5 (128, 160, 192, 224, 256).
     const NUM_VALID_KEY_SIZES: usize = 5;
