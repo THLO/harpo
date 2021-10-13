@@ -232,8 +232,7 @@ pub(crate) fn reconstruct_secret(secret_shares: &[SecretShare]) -> FiniteFieldEl
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::seq::SliceRandom;
-    use rand::Rng;
+    use rand::{seq::SliceRandom, Rng};
 
     /// The number of test runs.
     const NUM_TEST_RUNS: usize = 10;
