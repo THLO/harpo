@@ -115,6 +115,28 @@ impl PartialEq for SeedPhrase {
     }
 }
 
+pub(crate) fn get_random_seed_phrase(num_words: usize, word_list: &[&str]) -> SeedPhraseResult {
+    if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
+        return Err(HarpoError::InvalidParameter(
+            "The number of words must be 12, 15, 18, 21, or 24.".to_string(),
+        ));
+    }
+    // Determine the number of bits based on the number of words.
+    let num_bits = ((num_words * NUM_BITS_PER_WORD) / ENTROPY_INCREMENT) * ENTROPY_INCREMENT;
+    // Get the modulus.
+    match get_modulus_for_words(num_words) {
+        Some(modulus) => {
+            // Create a random finite field element.
+            let element = FiniteFieldElement::new_random(num_bits, &modulus);
+            // Return the seed phrase derived from this element.
+            get_seed_phrase_for_element(&element, word_list)
+        }
+        None => Err(HarpoError::InvalidSeedPhrase(
+            "Could not generate a seed phrase.".to_string(),
+        )),
+    }
+}
+
 /// The function returns the index of a word in a word list, if any.
 ///
 /// The function searches for the given word in the given word list and returns the index
@@ -551,6 +573,25 @@ mod tests {
                 get_element_for_seed_phrase(&seed_phrase, &DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
+        }
+    }
+
+    #[test]
+    // This function tests the random seed phrase generation.
+    fn test_random_seed_phrase_generation() {
+        // The valid number of words.
+        let valid_num_words: [usize; NUM_VALID_KEY_SIZES] = [12, 15, 18, 21, 24];
+        for _test in 0..NUM_TEST_RUNS {
+            // Generate a random seed phrase.
+            let num_words = valid_num_words
+                .choose(&mut rand::thread_rng())
+                .expect("A valid random number of words should be chosen.");
+            let seed_phrase = get_random_seed_phrase(*num_words, &DEFAULT_WORD_LIST)
+                .expect("A valid seed phrase should be generated.");
+            // Make sure that the number of words is correct.
+            assert_eq!(seed_phrase.len(), *num_words);
+            // Make sure it is BIP-0039 compliant.
+            assert!(is_compliant(&seed_phrase, &DEFAULT_WORD_LIST));
         }
     }
 
