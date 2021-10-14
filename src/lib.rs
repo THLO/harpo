@@ -30,7 +30,7 @@ mod word_list;
 
 use secret_sharing::{reconstruct_secret, SecretPolynomial, SecretShare};
 use seed_phrase::{
-    get_element_and_index_for_seed_phrase, get_element_for_seed_phrase,
+    get_element_and_index_for_seed_phrase, get_element_for_seed_phrase, get_random_seed_phrase,
     get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, is_compliant,
     SeedPhrase, NUM_BITS_FOR_INDEX,
 };
@@ -282,6 +282,30 @@ pub fn reconstruct_seed_phrase_for_word_list(
         // Turn the secret element into a seed phrase.
         get_seed_phrase_for_element(&secret_element, word_list)
     }
+}
+
+/// The function generates and returns a random [SeedPhrase](crate::seed_phrase::SeedPhrase).
+///
+/// A random, BIP-0039 compliant seed phrase is returned if the requested number of words is
+/// valid.
+///
+/// * `num_words` - The number of words in the seed phrase.
+/// * `word_list` - The word list to be used.
+pub fn generate_seed_phrase_for_word_list(
+    num_words: usize,
+    word_list: &[&str],
+) -> SeedPhraseResult {
+    get_random_seed_phrase(num_words, word_list)
+}
+
+/// The function generates and returns a random [SeedPhrase](crate::seed_phrase::SeedPhrase).
+///
+/// A random, BIP-0039 compliant seed phrase is returned if the requested number of words is
+/// valid.
+///
+/// * `num_words` - The number of words in the seed phrase.
+pub fn generate_seed_phrase(num_words: usize) -> SeedPhraseResult {
+    generate_seed_phrase_for_word_list(num_words, &DEFAULT_WORD_LIST)
 }
 
 // ******************************** TESTS ********************************
