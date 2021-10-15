@@ -42,7 +42,7 @@ use word_list::DEFAULT_WORD_LIST;
 /// It is `2^NUM_BITS_FOR_INDEX = 16`because 4 bits are used to encode the index in the embedding. It is not easily
 /// possible to use more than 4 bits because only 4 additional bits are used when using a 12-word
 /// seed phrase (12*11 = 132 bits to encode a secret of 128 bits).
-const MAX_EMBEDDED_SHARES: usize = 2 << NUM_BITS_FOR_INDEX;
+const MAX_EMBEDDED_SHARES: usize = 1 << NUM_BITS_FOR_INDEX;
 
 /// Every word list must have exactly this number of words.
 const NUM_WORDS_IN_LIST: usize = 2048;
@@ -175,7 +175,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
         ));
     }
     // Embedding is only possible if there are at most `MAX_EMBEDDED_SHARES` shares.
-    if num_shares > MAX_EMBEDDED_SHARES && embed_indices {
+    if (num_shares > MAX_EMBEDDED_SHARES) && embed_indices {
         return Err(HarpoError::InvalidParameter(format!(
             "Only {} secret-shared pass phrases can be created with embedded indices.\n\
             Use a smaller number of shares or turn of index embedding ('--no-embedding').",
@@ -270,8 +270,8 @@ pub fn reconstruct_seed_phrase_for_word_list(
         let mut secret_shares = vec![];
         // Create a hash set of indices.
         let mut indices = HashSet::new();
-        for code in seed_phrases {
-            let (element, index) = get_element_and_index_for_seed_phrase(code, word_list)?;
+        for seed_phrase in seed_phrases {
+            let (element, index) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
             if !indices.contains(&index) {
                 secret_shares.push(SecretShare::new(&element, index));
                 indices.insert(index);
@@ -313,6 +313,16 @@ pub fn generate_seed_phrase(num_words: usize) -> SeedPhraseResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{seq::SliceRandom, Rng};
+
+    /// The different number of seed phrase lengths is 5 (12, 15, 18, 21, 24).
+    const NUM_SEED_PHRASE_LENGTHS: usize = 5;
+
+    /// The number of test runs.
+    const NUM_TEST_RUNS: usize = 10;
+
+    /// The maximum number of secret-shared seed phrases in the test runs.
+    const MAX_NUM_SEED_PHRASES: usize = 64;
 
     #[test]
     /// The function provides basic tests for the create function.
@@ -382,5 +392,62 @@ mod tests {
                 .collect::<Vec<String>>(),
         );
         assert_eq!(seed_phrase.unwrap(), expected_seed_phrase);
+    }
+
+    #[test]
+    /// The function tests the reconstruction of secret-shared seed phrases derived from
+    /// a randomly generated seed phrase.
+    fn test_random_seed_phrase_reconstruction() {
+        // The valid number of words.
+        let valid_num_words: [usize; NUM_SEED_PHRASE_LENGTHS] = [12, 15, 18, 21, 24];
+        let mut rng = rand::thread_rng();
+        for _test in 0..NUM_TEST_RUNS {
+            // Choose a random number of words.
+            let num_words = valid_num_words
+                .choose(&mut rng)
+                .expect("A valid random number of words should be chosen.");
+            // Generate a random seed phrase.
+            let seed_phrase = generate_seed_phrase(*num_words)
+                .expect("The generation of a seed phrase should work.");
+            // Determine randomly if indices should be embedded.
+            let embed_indices = rng.gen::<bool>();
+            // Get a random number of secret-shared seed phrases parameter.
+            let num_seed_phrases = match embed_indices {
+                true => rng.gen_range(2..MAX_EMBEDDED_SHARES),
+                false => rng.gen_range(2..MAX_NUM_SEED_PHRASES),
+            };
+            // Get the random threshold.
+            let threshold = rng.gen_range(2..num_seed_phrases + 1);
+            // Create the secret-shard seed phrases.
+            let seed_phrases = create_secret_shared_seed_phrases(
+                &seed_phrase,
+                threshold,
+                num_seed_phrases,
+                embed_indices,
+            )
+            .expect("The creation of secret-shared seed phrases should work.");
+            // Choose sufficiently many seed phrases.
+            let num_selected = rng.gen_range(threshold..num_seed_phrases + 1);
+            let selected_seed_phrases: Vec<SeedPhrase> = seed_phrases
+                .choose_multiple(&mut rng, num_selected)
+                .cloned()
+                .collect();
+            // Reconstruct the original seed phrase.
+            let recontructed_seed_phrase = reconstruct_seed_phrase(&selected_seed_phrases)
+                .expect("The reconstruction of a seed-phrase should work.");
+            // Assert that the original and reconstructed seed phrases are identical.
+            assert_eq!(seed_phrase, recontructed_seed_phrase);
+            // Choose a number of seed phrases below the threshold.
+            let num_selected = rng.gen_range(1..threshold);
+            let selected_seed_phrases: Vec<SeedPhrase> = seed_phrases
+                .choose_multiple(&mut rng, num_selected)
+                .cloned()
+                .collect();
+            // Attempt to recontruct the original seed phrase.
+            let recontructed_seed_phrase = reconstruct_seed_phrase(&selected_seed_phrases)
+                .expect("The reconstruction of a seed-phrase should work.");
+            // Assert that the original and reconstructed seed phrases are not identical.
+            assert_ne!(seed_phrase, recontructed_seed_phrase);
+        }
     }
 }
