@@ -242,9 +242,10 @@ mod tests {
     /// at value 0 (extracting the secret) and 1 (returning the sum of the coefficients).
     fn test_polynomial_evaluation() {
         let modulus = get_modulus_for_bits(128).unwrap();
+        let mut rng = rand::thread_rng();
         for _test in 0..NUM_TEST_RUNS {
             let secret = FiniteFieldElement::new_random(128, &modulus);
-            let degree = rand::thread_rng().gen_range(2..20);
+            let degree = rng.gen_range(2..20);
             let polynomial = SecretPolynomial::new(&secret, 128, degree).unwrap();
             // Evaluate the secret polynomial at 0.
             assert_eq!(polynomial.evaluate(0), secret);
@@ -261,16 +262,17 @@ mod tests {
     #[test]
     /// The function tests the reconstruction of the secret parameter in the polynomial.
     fn test_working_secret_reconstruction() {
+        let mut rng = rand::thread_rng();
         for _test in 0..NUM_TEST_RUNS {
             let secret = FiniteFieldElement::new_random(256, &get_modulus_for_bits(256).unwrap());
-            let degree = rand::thread_rng().gen_range(2..20);
+            let degree = rng.gen_range(2..20);
             let polynomial = SecretPolynomial::new(&secret, 256, degree).unwrap();
             // Construct a large number of shares.
             let shares = polynomial.get_secret_shares((degree * 2) as u32);
             // Select a sufficiently large subset.
             let random_shares: Vec<SecretShare> = shares
                 //.into_iter()
-                .choose_multiple(&mut rand::thread_rng(), degree + 1)
+                .choose_multiple(&mut rng, degree + 1)
                 .cloned()
                 .collect();
             // Reconstruct the secret.
@@ -285,17 +287,17 @@ mod tests {
     // shares are combined.
     fn test_failing_secret_reconstruction() {
         let modulus = &get_modulus_for_bits(256).unwrap();
+        let mut rng = rand::thread_rng();
         for _test in 0..NUM_TEST_RUNS {
             let secret = FiniteFieldElement::new_random(256, modulus);
-            let degree = rand::thread_rng().gen_range(2..20);
+            let degree = rng.gen_range(2..20);
             let polynomial = SecretPolynomial::new(&secret, 256, degree).unwrap();
             // Construct a large number of shares.
             let shares = polynomial.get_secret_shares((degree * 2) as u32);
             // Select too few secret shares to reconstruct the secret.
-            let num_secret_shares = rand::thread_rng().gen_range(1..degree + 1);
+            let num_secret_shares = rng.gen_range(1..degree + 1);
             let random_shares: Vec<SecretShare> = shares
-                //.into_iter()
-                .choose_multiple(&mut rand::thread_rng(), num_secret_shares)
+                .choose_multiple(&mut rng, num_secret_shares)
                 .cloned()
                 .collect();
             // Attempt to reconstruct the secret.

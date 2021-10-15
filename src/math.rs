@@ -316,8 +316,9 @@ mod tests {
     /// the correct number of bytes.
     fn test_correct_byte_length() {
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
+        let mut rng = rand::thread_rng();
         for _i in 0..NUM_TEST_RUNS {
-            let length = rand::thread_rng().gen_range(10..256);
+            let length = rng.gen_range(10..256);
             let element = FiniteFieldElement::new_random(length, &modulus);
             // Since a 256-bit modulus is used, 256/8 = 32 bytes should always be used.
             assert_eq!(element.get_bytes().len(), 256 >> 3);
