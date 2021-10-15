@@ -88,6 +88,16 @@ impl SeedPhrase {
     }
 }
 
+impl Clone for SeedPhrase {
+    /// The function defines how a seed phrase is cloned.
+    fn clone(&self) -> SeedPhrase {
+        SeedPhrase {
+            words: self.words.clone(),
+            index: self.index,
+        }
+    }
+}
+
 impl fmt::Display for SeedPhrase {
     /// A seed phrase is displayed as a space-delimited string.
     /// If it has an associated index, the index followed by a colon is prepended to the
@@ -556,11 +566,11 @@ mod tests {
     fn test_random_seed_phrase_conversion() {
         // The valid key sizes in bytes.
         let key_sizes: [usize; NUM_VALID_KEY_SIZES] = [16, 20, 24, 28, 32];
-        let mut rand = rand::thread_rng();
+        let mut rng = rand::thread_rng();
         for _test in 0..NUM_TEST_RUNS {
             // Generate a random key.
-            let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
-            let size = key_sizes.choose(&mut rand).unwrap();
+            let random_bytes = rng.gen::<[u8; 32]>();
+            let size = key_sizes.choose(&mut rng).unwrap();
             let mut random_key: Vec<u8> = vec![0; *size];
             random_key.clone_from_slice(&random_bytes[..*size]);
             // Generate the corresponding finite field element.
@@ -581,10 +591,11 @@ mod tests {
     fn test_random_seed_phrase_generation() {
         // The valid number of words.
         let valid_num_words: [usize; NUM_VALID_KEY_SIZES] = [12, 15, 18, 21, 24];
+        let mut rng = rand::thread_rng();
         for _test in 0..NUM_TEST_RUNS {
             // Generate a random seed phrase.
             let num_words = valid_num_words
-                .choose(&mut rand::thread_rng())
+                .choose(&mut rng)
                 .expect("A valid random number of words should be chosen.");
             let seed_phrase = get_random_seed_phrase(*num_words, &DEFAULT_WORD_LIST)
                 .expect("A valid seed phrase should be generated.");
