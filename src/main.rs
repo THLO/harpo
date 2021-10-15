@@ -1,3 +1,7 @@
+//! The `main` defines the command-line interface and interacts with the `lib` module
+//! to provide access to all publicly accessible functionality of the `harpo` crate.
+//!
+
 extern crate clap;
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use harpo::seed_phrase::SeedPhrase;
