@@ -7,24 +7,27 @@ use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use harpo::seed_phrase::SeedPhrase;
 use harpo::{
     create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
-    reconstruct_seed_phrase, reconstruct_seed_phrase_for_word_list, HarpoError, HarpoResult,
-    SeedPhraseResult,
+    generate_seed_phrase, generate_seed_phrase_for_word_list, reconstruct_seed_phrase,
+    reconstruct_seed_phrase_for_word_list, HarpoError, HarpoResult, SeedPhraseResult,
 };
 use std::fs::read_to_string;
 
-/// The subcommand to create secret shares.
+/// The subcommand to create secret-shared seed phrases.
 const CREATE_SUBCOMMAND: &str = "create";
 
-/// The subcommand to reconstruct a shared secret.
+/// The subcommand to reconstruct a seed phrase.
 const RECONSTRUCT_SUBCOMMAND: &str = "reconstruct";
+
+/// The subcommand to generate a seed phrase.
+const GENERATE_SUBCOMMAND: &str = "generate";
 
 /// The function parses the command-line arguments.
 fn parse_command_line<'a>() -> ArgMatches<'a> {
-    // Extract the version from the Cargo.toml file.
+    // Extract version and author from the Cargo.toml file.
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
-    // The arguments that the subcommands share are defined first.
+    // The arguments that the create and reconstruct subcommands share are defined first.
 
     // The argument --file is used to specify input stored in a file.
     let file_argument = Arg::with_name("file")
@@ -81,6 +84,18 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .arg(interactive_argument)
         .group(input_group);
 
+    // The generate subcommand.
+    let generate_subcommand = SubCommand::with_name(GENERATE_SUBCOMMAND)
+        .about("Generates a seed phrase")
+        .arg(
+            Arg::with_name("length") // The number of words.
+                .required(true)
+                .takes_value(true)
+                .short("l")
+                .long("length")
+                .help("Sets the number of words to the given value"),
+        );
+
     // The application including the top-level arguments.
     App::new("harpo")
         .version(VERSION)
@@ -102,6 +117,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         )
         .subcommand(create_subcommand) // Add the create subcommand.
         .subcommand(reconstruct_subcommand) // Add the reconstruct subcommand.
+        .subcommand(generate_subcommand) // Add the generate subcommand.
         .get_matches()
 }
 
@@ -211,7 +227,7 @@ fn handle_create(
         println!("Requested threshold for reconstruction: {}", threshold);
         println!();
     }
-    // Read the input fropm a file or interactively.
+    // Read the input from a file or interactively.
     let seed_phrase = if let Some(file_path) = command_line.value_of("file") {
         if verbose {
             println!("Reading the seed phrase from {}...", file_path);
@@ -320,7 +336,7 @@ fn handle_reconstruct(
     verbose: bool,
     word_list: Option<Vec<String>>,
 ) -> SeedPhraseResult {
-    // Read the input fropm a file or interactively.
+    // Read the input from a file or interactively.
     let seed_phrases = if let Some(file_path) = command_line.value_of("file") {
         // Print verbose output if the flag --verbose is set.
         if verbose {
@@ -366,6 +382,26 @@ fn read_word_list_from_file(file_path: &str) -> HarpoResult<Vec<String>> {
     Ok(word_list)
 }
 
+fn handle_generate(
+    command_line: &clap::ArgMatches,
+    verbose: bool,
+    word_list: Option<Vec<String>>,
+) -> SeedPhraseResult {
+    // Get the length of the word list. The unwrap() is okay because --length must be provided.
+    let length = command_line.value_of("length").unwrap().parse::<usize>()?;
+    if verbose {
+        println!("Length of seed phrase: {}", length);
+    }
+    // Generate the seed phrase.
+    match word_list {
+        Some(list) => {
+            let slice_list: Vec<&str> = list.iter().map(|s| s.as_str()).collect();
+            generate_seed_phrase_for_word_list(length, &slice_list)
+        }
+        None => generate_seed_phrase(length),
+    }
+}
+
 /// The main function uses the command-line arguments to trigger the right command execution.
 ///
 /// Given the command-line arguments, the main function triggers the processing of the
@@ -397,7 +433,7 @@ fn main() {
             match handle_create(
                 &command_line
                     .subcommand_matches(CREATE_SUBCOMMAND)
-                    .expect("The 'create' command must be specififed."),
+                    .expect("The 'create' command must be specified."),
                 verbose,
                 word_list,
             ) {
@@ -419,7 +455,7 @@ fn main() {
             match handle_reconstruct(
                 &command_line
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
-                    .expect("Error: The 'create' command must be specififed."),
+                    .expect("Error: The 'create' command must be specified."),
                 verbose,
                 word_list,
             ) {
@@ -427,6 +463,26 @@ fn main() {
                     println!();
                     println!("Reconstructed seed phrase:");
                     println!("--------------------------");
+                    println!("{}", seed_phrase)
+                }
+                Err(err) => {
+                    println!();
+                    eprintln!("{}", err);
+                }
+            };
+        }
+        Some(GENERATE_SUBCOMMAND) => {
+            match handle_generate(
+                &command_line
+                    .subcommand_matches(GENERATE_SUBCOMMAND)
+                    .expect("Error: The 'generate' command must be specified."),
+                verbose,
+                word_list,
+            ) {
+                Ok(seed_phrase) => {
+                    println!();
+                    println!("Generated seed phrase:");
+                    println!("----------------------");
                     println!("{}", seed_phrase)
                 }
                 Err(err) => {
