@@ -218,7 +218,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     }
 }
 
-/// The function is called to recontruct a seed phrase.
+/// The function is called to reconstruct a seed phrase.
 ///
 /// Given a list of secret-shared seed phrases, the function
 /// reconstructs the seed phrase that was originally used to generate the given seed phrases.
@@ -230,7 +230,7 @@ pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> SeedPhraseResult 
     reconstruct_seed_phrase_for_word_list(seed_phrases, &DEFAULT_WORD_LIST)
 }
 
-/// The function is called to recontruct a seed phrase.
+/// The function is called to reconstruct a seed phrase.
 ///
 /// Given a list of secret-shared seed phrases and a list of permissible words, the function
 /// reconstructs the seed phrase that was originally used to generate the given seed phrases.
@@ -277,14 +277,14 @@ pub fn reconstruct_seed_phrase_for_word_list(
                 indices.insert(index);
             }
         }
-        // Recontruct the secret element.
+        // Reconstruct the secret element.
         let secret_element = reconstruct_secret(&secret_shares);
         // Turn the secret element into a seed phrase.
         get_seed_phrase_for_element(&secret_element, word_list)
     }
 }
 
-/// The function generates and returns a random [SeedPhrase](crate::seed_phrase::SeedPhrase).
+/// The function generates and returns a random seed phrase.
 ///
 /// A random, BIP-0039 compliant seed phrase is returned if the requested number of words is
 /// valid.
@@ -298,7 +298,7 @@ pub fn generate_seed_phrase_for_word_list(
     get_random_seed_phrase(num_words, word_list)
 }
 
-/// The function generates and returns a random [SeedPhrase](crate::seed_phrase::SeedPhrase).
+/// The function generates and returns a random seed phrase.
 ///
 /// A random, BIP-0039 compliant seed phrase is returned if the requested number of words is
 /// valid.
@@ -433,21 +433,21 @@ mod tests {
                 .cloned()
                 .collect();
             // Reconstruct the original seed phrase.
-            let recontructed_seed_phrase = reconstruct_seed_phrase(&selected_seed_phrases)
+            let reconstructed_seed_phrase = reconstruct_seed_phrase(&selected_seed_phrases)
                 .expect("The reconstruction of a seed-phrase should work.");
             // Assert that the original and reconstructed seed phrases are identical.
-            assert_eq!(seed_phrase, recontructed_seed_phrase);
+            assert_eq!(seed_phrase, reconstructed_seed_phrase);
             // Choose a number of seed phrases below the threshold.
             let num_selected = rng.gen_range(1..threshold);
             let selected_seed_phrases: Vec<SeedPhrase> = seed_phrases
                 .choose_multiple(&mut rng, num_selected)
                 .cloned()
                 .collect();
-            // Attempt to recontruct the original seed phrase.
-            let recontructed_seed_phrase = reconstruct_seed_phrase(&selected_seed_phrases)
+            // Attempt to reconstruct the original seed phrase.
+            let reconstructed_seed_phrase = reconstruct_seed_phrase(&selected_seed_phrases)
                 .expect("The reconstruction of a seed-phrase should work.");
             // Assert that the original and reconstructed seed phrases are not identical.
-            assert_ne!(seed_phrase, recontructed_seed_phrase);
+            assert_ne!(seed_phrase, reconstructed_seed_phrase);
         }
     }
 }

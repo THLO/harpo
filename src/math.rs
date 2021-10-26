@@ -98,7 +98,7 @@ impl FiniteFieldElement {
 
     /// The function creates a random finite field element.
     ///
-    /// * `num_bits` - The number of random bits used to contruct the finite field element.
+    /// * `num_bits` - The number of random bits used to construct the finite field element.
     /// * `modulus` - The modulus.
     pub fn new_random(num_bits: usize, modulus: &BigUint) -> Self {
         FiniteFieldElement {
@@ -209,7 +209,7 @@ impl Div for FiniteFieldElement {
     // This directive is required because division uses multiplication with the inverse element.
     #[allow(clippy::suspicious_arithmetic_impl)]
     fn div(self, other: Self) -> Self {
-        // Get the moduluar inverse of the other element's value.
+        // Get the modular inverse of the other element's value.
         // The modulus of "self" is used because the first term defines the modulus of the
         // operation.
         let inverse_value = modular_inverse(&other.value, &self.modulus);

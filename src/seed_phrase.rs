@@ -312,7 +312,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     let mut bytes: Vec<u8> = vec![0; size];
     // The number of used bits in the current byte.
     let mut num_used_bits = 0;
-    // The index of the currrent byte.
+    // The index of the current byte.
     let mut current_index = 0;
     // Iterate over all indices.
     for index in indices {
@@ -341,7 +341,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
             current_index += 1;
             num_used_bits = 0;
         } else {
-            // Otherwse, the number of used bits is the number of bits written to the
+            // Otherwise, the number of used bits is the number of bits written to the
             // second byte.
             num_used_bits = num_bits_second_byte;
         }
@@ -368,7 +368,7 @@ pub(crate) fn get_seed_phrase_for_element(
 ///
 /// In addition to the finite field element and the word list, the function further needs the
 /// index (if any) and the information whether the index is supposed to be embedded.
-/// An error is returend if the index must be embedded but no index is provided.
+/// An error is returned if the index must be embedded but no index is provided.
 ///
 /// * `number` - The finite field element.
 /// * `index` - The index of the finite field element.
