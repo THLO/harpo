@@ -133,7 +133,6 @@ pub(crate) fn get_random_seed_phrase(num_words: usize, word_list: &[&str]) -> Se
     }
     // Determine the number of bits based on the number of words.
     let num_bits = ((num_words * NUM_BITS_PER_WORD) / ENTROPY_INCREMENT) * ENTROPY_INCREMENT;
-    // Get the modulus.
     match get_modulus_for_words(num_words) {
         Some(modulus) => {
             // Create a random finite field element.
@@ -191,9 +190,8 @@ pub(crate) fn get_element_for_seed_phrase(
     seed_phrase: &SeedPhrase,
     word_list: &[&str],
 ) -> HarpoResult<FiniteFieldElement> {
-    // Get the element and discard the index.
+    // Return the element without the index.
     let (element, _) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
-    // Return the corresponding finite field element.
     Ok(element)
 }
 
@@ -236,20 +234,16 @@ pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool
     let index_list_result = get_index_list(seed_phrase, word_list);
     match index_list_result {
         Ok(index_list) => {
-            // Convert the indices into a byte array.
             let bytes = get_bytes_from_indices(&index_list);
             // The number of bytes used to build the element is a multiple of 32 bits = 4 bytes.
             let num_used_bytes = (bytes.len() >> 2) << 2;
-            // Copy the bytes into a new array.
             let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
             used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
             // Compute the SHA-256 hash of the bytes.
             let mut hasher = Sha256::new();
             hasher.update(&used_bytes);
             let hash = hasher.finalize();
-            // The number of words.
             let num_words = seed_phrase.len();
-            // The number of hash bits that are used.
             let num_hash_bits = NUM_BITS_PER_WORD * num_words - (num_used_bytes << 3);
             let num_zero_bits = 8 - num_hash_bits;
             // Set the unused bits to zero.
@@ -274,21 +268,17 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
     seed_phrase: &SeedPhrase,
     word_list: &[&str],
 ) -> HarpoResult<(FiniteFieldElement, u32)> {
-    // The words are mapped to their indices in the word list.
+    // The words are mapped to their indices in the word list and then converted into a byte array.
     let index_list = get_index_list(seed_phrase, word_list)?;
-    // Convert the indices into a byte array.
     let bytes = get_bytes_from_indices(&index_list);
     // The number of bytes used to build the element is a multiple of 32 bits = 4 bytes.
     let num_used_bytes = (bytes.len() >> 2) << 2;
-    // Copy the bytes into a new array.
     let mut used_bytes: Vec<u8> = vec![0; num_used_bytes];
     used_bytes.clone_from_slice(&bytes[0..num_used_bytes]);
-    // Get the number of words.
     let num_words = seed_phrase.len();
     // Get the modulus. Calling unwrap() is okay here because the number of words is checked
     // at the beginning of the function call.
     let modulus = get_modulus_for_words(num_words).unwrap();
-    // Get the index.
     let index = if let Some(index) = seed_phrase.get_index() {
         index
     } else {
@@ -296,7 +286,6 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
         // We add 1 because 1 was subtracted when encoding the index.
         ((bytes[num_used_bytes] >> (8 - NUM_BITS_FOR_INDEX)) + 1) as u32
     };
-    // Return the corresponding finite field element and index.
     Ok((FiniteFieldElement::new(&bytes, &modulus), index))
 }
 
@@ -308,7 +297,6 @@ pub(crate) fn get_element_and_index_for_seed_phrase(
 fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
     // Round the number of bytes up so that there is space for all indices.
     let size = (indices.len() * NUM_BITS_PER_WORD + 7) / 8;
-    // The bytes are written into this byte array.
     let mut bytes: Vec<u8> = vec![0; size];
     // The number of used bits in the current byte.
     let mut num_used_bits = 0;
@@ -386,18 +374,14 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
             "No index is provided to embed in the seed phrase.".into(),
         ));
     }
-    // Get the bytes.
     let bytes = element.get_bytes();
-    // Compute the SHA-256 hash.
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
     let hash = hasher.finalize();
     // Create the bytes with bits of the hash appended.
     let num_words = ((bytes.len() << 3) + NUM_BITS_PER_WORD - 1) / NUM_BITS_PER_WORD;
     let total_num_bits = num_words * NUM_BITS_PER_WORD;
-    // Prepare the byte array for the words.
     let mut encoded_words = vec![0; (total_num_bits + 7) >> 3];
-    // Copy the number into the encoded words array.
     encoded_words[..bytes.len()].clone_from_slice(&bytes[..]);
     // When embedding the index of the seed phrase, it is placed in the 4 higher-order bits
     // of the byte that holds the first byte of the hash.
@@ -410,14 +394,12 @@ pub(crate) fn get_seed_phrase_for_element_with_embedding(
     } else {
         hash[0]
     };
-    // Retrieve the indices from the given byte array.
+    // Retrieve the indices from the given byte array and turn them into words.
     let indices = get_indices_from_bytes(&encoded_words, num_words)?;
-    // Turn the indices into words.
     let words: Vec<String> = indices
         .iter()
         .map(|index| word_list[*index].to_string())
         .collect();
-    // Return the seed phrase.
     if !embed_index {
         // If the index is not embedded but there is an index, it must be provided explicitly.
         match index {

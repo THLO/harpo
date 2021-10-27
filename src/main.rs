@@ -208,12 +208,12 @@ fn handle_create(
     verbose: bool,
     word_list: Option<Vec<String>>,
 ) -> HarpoResult<Vec<SeedPhrase>> {
-    // The unwrap() is okay because --num-shares must be provided.
+    // The unwrap() call is okay because --num-shares must be provided.
     let num_shares = command_line
         .value_of("num-shares")
         .unwrap()
         .parse::<usize>()?;
-    // The unwrap() is okay because --threshold must be provided.
+    // The unwrap() call is okay because --threshold must be provided.
     let threshold = command_line
         .value_of("threshold")
         .unwrap()
@@ -237,9 +237,7 @@ fn handle_create(
         // The seed phrase must be entered interactively.
         read_seed_phrase_interactively()?
     };
-    // Get the --no-embedding flag.
     let embed_indices = !command_line.is_present("no-embedding");
-    // Create the shares and return them.
     if verbose {
         println!();
         println!(
@@ -247,7 +245,7 @@ fn handle_create(
             seed_phrase
         );
     }
-    // Call the right library function.
+    // Create the shares and return them.
     match word_list {
         Some(list) => {
             let slice_list: Vec<&str> = list.iter().map(|s| s.as_str()).collect();
@@ -387,7 +385,7 @@ fn handle_generate(
     verbose: bool,
     word_list: Option<Vec<String>>,
 ) -> SeedPhraseResult {
-    // Get the length of the word list. The unwrap() is okay because --length must be provided.
+    // Get the length of the word list. The unwrap() call is okay because --length must be provided.
     let length = command_line.value_of("length").unwrap().parse::<usize>()?;
     if verbose {
         println!("Length of seed phrase: {}", length);
@@ -407,9 +405,7 @@ fn handle_generate(
 /// Given the command-line arguments, the main function triggers the processing of the
 /// provided subcommand.
 fn main() {
-    // Get all command_line arguments.
     let command_line = parse_command_line();
-    // Check if the verbose flag is used.
     let verbose = command_line.is_present("verbose");
     // If a path to a word-list file is provided, try to load it.
     let word_list = match command_line.value_of("word-list") {

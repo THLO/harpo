@@ -154,7 +154,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     embed_indices: bool,
     word_list: &[&str],
 ) -> HarpoResult<Vec<SeedPhrase>> {
-    // Make sure that the word list contains the right number of words:
+    // Make sure that the word list contains the right number of words.
     if word_list.len() != NUM_WORDS_IN_LIST {
         return Err(HarpoError::InvalidSeedPhrase(format!(
             "The word list contains {} words instead of {}.",
@@ -194,7 +194,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     let degree = threshold - 1;
     // Get the number of bits of security.
     let num_bits = seed_phrase.get_num_bits();
-    // Create a secret polynomial (note that degree = threshold - 1).
+    // Create a secret polynomial.
     match SecretPolynomial::new(&secret, num_bits, degree) {
         Some(polynomial) => {
             // Create the secret shares for the finite field element.
@@ -268,7 +268,6 @@ pub fn reconstruct_seed_phrase_for_word_list(
     } else {
         // Get the corresponding secret shares.
         let mut secret_shares = vec![];
-        // Create a hash set of indices.
         let mut indices = HashSet::new();
         for seed_phrase in seed_phrases {
             let (element, index) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
@@ -277,9 +276,8 @@ pub fn reconstruct_seed_phrase_for_word_list(
                 indices.insert(index);
             }
         }
-        // Reconstruct the secret element.
+        // Reconstruct the secret element and turn it into a seed phrase.
         let secret_element = reconstruct_secret(&secret_shares);
-        // Turn the secret element into a seed phrase.
         get_seed_phrase_for_element(&secret_element, word_list)
     }
 }
