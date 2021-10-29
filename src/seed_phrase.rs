@@ -125,6 +125,12 @@ impl PartialEq for SeedPhrase {
     }
 }
 
+/// The function returns a random seed phrase.
+///
+/// The function generates a random, BIP-0039-compliant seed phrase with the desired number
+/// of words taken from the provided word list.
+/// * `num_words` - The requested number of words in the random seed phrase.
+/// * `word-list` - The word list.
 pub(crate) fn get_random_seed_phrase(num_words: usize, word_list: &[&str]) -> SeedPhraseResult {
     if num_words % 3 != 0 || num_words < 12 || num_words > 24 {
         return Err(HarpoError::InvalidParameter(
@@ -149,7 +155,7 @@ pub(crate) fn get_random_seed_phrase(num_words: usize, word_list: &[&str]) -> Se
 /// The function returns the index of a word in a word list, if any.
 ///
 /// The function searches for the given word in the given word list and returns the index
-/// in the list if it finds it. Otherwise, it returns 'None'.
+/// in the list if it finds it. Otherwise, it returns `None`.
 ///
 /// * `word` - The word that is looked up.
 /// * `word_list` - The list of words.
@@ -195,9 +201,9 @@ pub(crate) fn get_element_for_seed_phrase(
     Ok(element)
 }
 
-// The function returns the index list for a given seed phrase.
-//
-// * `seed_phrase` - The seed phrase.
+/// The function returns the index list for a given seed phrase.
+///
+/// * `seed_phrase` - The seed phrase.
 /// * `word_list` - The word list.
 fn get_index_list(seed_phrase: &SeedPhrase, word_list: &[&str]) -> HarpoResult<Vec<usize>> {
     // Verify that the seed phrase has a permissible number of words.
@@ -223,12 +229,12 @@ fn get_index_list(seed_phrase: &SeedPhrase, word_list: &[&str]) -> HarpoResult<V
     Ok(index_list)
 }
 
-// The function checks BIP-0039 compliance of the seed phrase.
-//
-// The function checks whether the last word is the expected word according to the BIP-0039
-// specification by examining the hash bits.
-//
-// * `seed_phrase` - The seed phrase.
+/// The function checks BIP-0039 compliance of the seed phrase.
+///
+/// The function checks whether the last word is the expected word according to the BIP-0039
+/// specification by examining the hash bits.
+///
+/// * `seed_phrase` - The seed phrase.
 pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool {
     // The words are mapped to their indices in the word list.
     let index_list_result = get_index_list(seed_phrase, word_list);
@@ -544,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    // This function generates random seed phrases and tests the correct conversion.
+    /// This function generates random seed phrases and tests the correct conversion.
     fn test_random_seed_phrase_conversion() {
         // The valid key sizes in bytes.
         let key_sizes: [usize; NUM_VALID_KEY_SIZES] = [16, 20, 24, 28, 32];
@@ -569,7 +575,7 @@ mod tests {
     }
 
     #[test]
-    // This function tests the random seed phrase generation.
+    /// This function tests the random seed phrase generation.
     fn test_random_seed_phrase_generation() {
         // The valid number of words.
         let valid_num_words: [usize; NUM_VALID_KEY_SIZES] = [12, 15, 18, 21, 24];
@@ -583,7 +589,7 @@ mod tests {
                 .expect("A valid seed phrase should be generated.");
             // Make sure that the number of words is correct.
             assert_eq!(seed_phrase.len(), *num_words);
-            // Make sure it is BIP-0039 compliant.
+            // Make sure it is BIP-0039-compliant.
             assert!(is_compliant(&seed_phrase, &DEFAULT_WORD_LIST));
         }
     }

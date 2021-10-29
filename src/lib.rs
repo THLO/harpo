@@ -4,8 +4,7 @@
 //! The `harpo` crate provides functionality to secret-share seed phrases.
 //!
 //! The main functions that `harpo` provides are:
-//! * [generate_seed_phrase](crate::generate_seed_phrase): Generate a seed phrase of the
-//!   desired length.
+//! * [generate_seed_phrase](crate::generate_seed_phrase): Generate a random seed phrase.
 //! * [create_secret_shared_seed_phrases](crate::create_secret_shared_seed_phrases):
 //!   Given a seed phrase, create the requested number of
 //!   secret-shared seed phrases. A threshold must be provided as well, specifying how many
@@ -17,17 +16,17 @@
 //! The additional functionality that `harpo` provides is documented below.
 //!
 
-/// The math module provides the required finite field operations.
+// The math module provides the required finite field operations.
 mod math;
 
 // The seed phrase module provides the conversion between seed phrases and the representation as
 // a finite field element.
 pub mod seed_phrase;
 
-/// The secret_sharing module provides the secret-sharing functionality.
+// The secret_sharing module provides the secret-sharing functionality.
 mod secret_sharing;
 
-/// The default word list is loaded from the word list module.
+// The default word list is loaded from the word list module.
 mod word_list;
 
 use secret_sharing::{reconstruct_secret, SecretPolynomial, SecretShare};
@@ -41,9 +40,9 @@ use std::fmt::Display;
 use word_list::DEFAULT_WORD_LIST;
 
 /// The maximum number of shares that can be embedded.
-/// It is `2^NUM_BITS_FOR_INDEX = 16`because 4 bits are used to encode the index in the embedding. It is not easily
-/// possible to use more than 4 bits because only 4 additional bits are used when using a 12-word
-/// seed phrase (12*11 = 132 bits to encode a secret of 128 bits).
+/// It is `2^NUM_BITS_FOR_INDEX = 16` because 4 bits are used to encode the index in the embedding.
+/// It is not easily possible to use more than 4 bits because only 4 additional bits are used
+/// when using a 12-word seed phrase (12*11 = 132 bits to encode a secret of 128 bits).
 const MAX_EMBEDDED_SHARES: usize = 1 << NUM_BITS_FOR_INDEX;
 
 /// Every word list must have exactly this number of words.
@@ -184,10 +183,10 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
             MAX_EMBEDDED_SHARES
         )));
     }
-    // Make sure that the seed phrase is BIP-0039 compliant.
+    // Make sure that the seed phrase is BIP-0039-compliant.
     if !is_compliant(seed_phrase, word_list) {
         return Err(HarpoError::InvalidSeedPhrase(
-            "The seed phrase is not BIP-0039 compliant.".to_string(),
+            "The seed phrase is not BIP-0039-compliant.".to_string(),
         ));
     }
     // Turn the seed_phrase into a finite field element.
@@ -286,7 +285,7 @@ pub fn reconstruct_seed_phrase_for_word_list(
 
 /// The function generates and returns a random seed phrase.
 ///
-/// A random, BIP-0039 compliant seed phrase is returned if the requested number of words is
+/// A random, BIP-0039-compliant seed phrase is returned if the requested number of words is
 /// valid.
 ///
 /// * `num_words` - The number of words in the seed phrase.
@@ -300,7 +299,7 @@ pub fn generate_seed_phrase_for_word_list(
 
 /// The function generates and returns a random seed phrase.
 ///
-/// A random, BIP-0039 compliant seed phrase is returned if the requested number of words is
+/// A random, BIP-0039-compliant seed phrase is returned if the requested number of words is
 /// valid.
 ///
 /// * `num_words` - The number of words in the seed phrase.

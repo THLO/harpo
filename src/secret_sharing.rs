@@ -2,14 +2,13 @@
 //! secret finite field element and reconstruct the secret element given sufficiently many
 //! secret shares.
 //!
+//! For each supported bit length, the used modulus is defined as the largest prime number with the
+//! given number of bits.
+//! These prime numbers can be found here: <https://primes.utm.edu/lists/2small/200bit.html>
 
 use crate::math::FiniteFieldElement;
 use num_bigint::BigUint;
 use std::fmt;
-
-/// For each supported bit length, The modulus is defined as the largest prime number with the
-/// given number of bits.
-/// These prime numbers can be found here: https://primes.utm.edu/lists/2small/200bit.html
 
 /// The prime number
 /// 2^128-159 = 340282366920938463463374607431768211297

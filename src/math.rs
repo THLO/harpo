@@ -1,5 +1,4 @@
-//! The `math` module provides the [FiniteFieldElement](crate::math::FiniteFieldElement) struct,
-//! which supports all required finite field operations.
+//! The `math` module provides all required finite field operations.
 //!
 
 use num::Integer;
@@ -75,7 +74,7 @@ pub(crate) struct FiniteFieldElement {
 }
 
 impl FiniteFieldElement {
-    /// The function creates an instance of [FiniteFieldElement](crate::math::FiniteFieldElement).
+    /// The function creates a finite field element.
     ///
     /// * `bytes` - The bytes that define the value of the finite field element.
     /// * `modulus` - The modulus.
