@@ -3,6 +3,12 @@ name = "harpo"
 version = "0.6.0"
 authors = ["Thomas Locher (@THLO)"]
 edition = "2018"
+license = "GPL-3.0-or-later"
+description = "The harpo crate provides functionality to secret-share seed phrases."
+homepage = "https://github.com/THLO/harpo"
+documentation = "https://github.com/THLO/harpo"
+repository = "https://github.com/THLO/harpo"
+readme = "README.md"
 
 [dependencies]
 clap = "~2"
