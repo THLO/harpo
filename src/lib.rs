@@ -4,15 +4,17 @@
 //! The `harpo` crate provides functionality to secret-share seed phrases.
 //!
 //! The main functions that `harpo` provides are:
+//! * [generate_seed_phrase](crate::generate_seed_phrase): Generate a seed phrase of the
+//!   desired length.
 //! * [create_secret_shared_seed_phrases](crate::create_secret_shared_seed_phrases):
 //!   Given a seed phrase, create the requested number of
 //!   secret-shared seed phrases. A threshold must be provided as well, specifying how many
 //!   secret-shared seed phrases are required to reconstruct the original seed phrase.
 //! * [reconstruct_seed_phrase](crate::reconstruct_seed_phrase): Given a set of
 //!   secret-shared seed phrases, the function
-//!   reconstruct a seed phrase.
+//!   reconstructs a seed phrase.
 //!
-//! The additional functionality that is provided is documented below.
+//! The additional functionality that `harpo` provides is documented below.
 //!
 
 /// The math module provides the required finite field operations.
