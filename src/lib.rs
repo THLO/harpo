@@ -107,7 +107,7 @@ pub type SeedPhraseResult = HarpoResult<SeedPhrase>;
 ///
 /// Specifically, it checks that the list contains exactly the required
 /// number of distinct words.
-pub fn validate_word_list(word_list: &[&str]) -> HarpoResult<()> {
+fn validate_word_list(word_list: &[&str]) -> HarpoResult<()> {
     let mut word_set: HashSet<&str> = HashSet::new();
     for word in word_list {
         word_set.insert(word);
