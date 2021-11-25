@@ -175,8 +175,8 @@ fn get_index(word: &str, word_list: &[&str]) -> Option<usize> {
             };
         }
     } else {
-        for (index, word) in word_list.iter().enumerate() {
-            if &word_list[index] == word {
+        for (index, word_at_index) in word_list.iter().enumerate() {
+            if word_at_index == &word {
                 return Some(index);
             }
         }
