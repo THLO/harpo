@@ -103,6 +103,25 @@ pub type HarpoResult<R> = Result<R, HarpoError>;
 /// [SeedPhrase](crate::seed_phrase::SeedPhrase) in the `Ok` case.
 pub type SeedPhraseResult = HarpoResult<SeedPhrase>;
 
+/// The function checks the validity of the provided word list.
+///
+/// Specifically, it checks that the list contains exactly the required
+/// number of distinct words.
+pub fn validate_word_list(word_list: &[&str]) -> HarpoResult<()> {
+    let mut word_set: HashSet<&str> = HashSet::new();
+    for word in word_list {
+        word_set.insert(word);
+    }
+    if word_set.len() != NUM_WORDS_IN_LIST {
+        return Err(HarpoError::InvalidSeedPhrase(format!(
+            "The word list contains {} distinct words instead of {}.",
+            word_set.len(),
+            NUM_WORDS_IN_LIST
+        )));
+    }
+    Ok(())
+}
+
 /// The function is called to create secret-shared seed phrases.
 ///
 /// Given a seed phrase, threshold, and total number of secret-shared seed phrases,
@@ -155,14 +174,8 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     embed_indices: bool,
     word_list: &[&str],
 ) -> HarpoResult<Vec<SeedPhrase>> {
-    // Make sure that the word list contains the right number of words.
-    if word_list.len() != NUM_WORDS_IN_LIST {
-        return Err(HarpoError::InvalidSeedPhrase(format!(
-            "The word list contains {} words instead of {}.",
-            word_list.len(),
-            NUM_WORDS_IN_LIST
-        )));
-    }
+    // Validate the word list.
+    validate_word_list(word_list)?;
     // Make sure that the threshold is not greater than the number of shares.
     if threshold > num_shares {
         return Err(HarpoError::InvalidParameter(
@@ -242,14 +255,8 @@ pub fn reconstruct_seed_phrase_for_word_list(
     seed_phrases: &[SeedPhrase],
     word_list: &[&str],
 ) -> SeedPhraseResult {
-    // Make sure that the word list contains the right number of words:
-    if word_list.len() != NUM_WORDS_IN_LIST {
-        return Err(HarpoError::InvalidSeedPhrase(format!(
-            "The word list contains {} words instead of {}.",
-            word_list.len(),
-            NUM_WORDS_IN_LIST
-        )));
-    }
+    // Validate the word list.
+    validate_word_list(word_list)?;
     // Ensure that all seed phrases have the same length and that the length is valid.
     if seed_phrases.is_empty() {
         return Err(HarpoError::InvalidSeedPhrase(
@@ -294,6 +301,8 @@ pub fn generate_seed_phrase_for_word_list(
     num_words: usize,
     word_list: &[&str],
 ) -> SeedPhraseResult {
+    // Validate the word list.
+    validate_word_list(word_list)?;
     get_random_seed_phrase(num_words, word_list)
 }
 
