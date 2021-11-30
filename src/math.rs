@@ -102,7 +102,7 @@ impl FiniteFieldElement {
         }
     }
 
-    /// The function creates a random finite field element corresponding to the provided integer.
+    /// The function creates a finite field element corresponding to the provided integer.
     ///
     /// * `number` - The 32-bit number.
     /// * `modulus` - The modulus.
