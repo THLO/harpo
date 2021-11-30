@@ -4,8 +4,7 @@
 use num::Integer;
 use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_traits::{One, Zero};
-use rand::distributions::Standard;
-use rand::Rng;
+use rand::{distributions::Standard, rngs::OsRng, Rng};
 use std::cmp::Ordering;
 use std::ops::{Add, Div, Mul, Sub};
 
@@ -20,12 +19,9 @@ pub(crate) fn get_random_number(bits: usize, modulus: &BigUint) -> BigUint {
     // Determine the required number of 32-byte integers.
     let num_elements = ((bits + 31) / 32) as usize;
     // Get the random numbers.
-    let random_bytes: Vec<u32> = rand::thread_rng()
-        .sample_iter(Standard)
-        .take(num_elements)
-        .collect();
+    let random_bytes: Vec<u32> = OsRng.sample_iter(Standard).take(num_elements).collect();
     // Construct a big unsigned integer and apply the modulus.
-    BigUint::from_slice(&random_bytes).modpow(&One::one(), modulus)
+    BigUint::from_slice(&random_bytes).mod_floor(modulus)
 }
 
 /// Given a number and a modulus, the function returns the modular inverse.
@@ -163,7 +159,7 @@ impl Add for FiniteFieldElement {
     /// `other`- The other finite field element.
     fn add(self, other: Self) -> Self {
         Self {
-            value: (self.value + other.value).modpow(&One::one(), &self.modulus),
+            value: (self.value + other.value).mod_floor(&self.modulus),
             modulus: self.modulus.clone(),
         }
     }
@@ -196,7 +192,7 @@ impl Mul for FiniteFieldElement {
     /// `other`- The other finite field element.
     fn mul(self, other: Self) -> Self {
         Self {
-            value: (self.value * other.value).modpow(&One::one(), &self.modulus),
+            value: (self.value * other.value).mod_floor(&self.modulus),
             modulus: self.modulus.clone(),
         }
     }
@@ -213,7 +209,7 @@ impl Div for FiniteFieldElement {
         // operation.
         let inverse_value = modular_inverse(&other.value, &self.modulus);
         Self {
-            value: (self.value * inverse_value).modpow(&One::one(), &self.modulus),
+            value: (self.value * inverse_value).mod_floor(&self.modulus),
             modulus: self.modulus.clone(),
         }
     }
@@ -235,10 +231,9 @@ mod tests {
     fn test_modular_inverse() {
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..NUM_TEST_RUNS {
-            let one = One::one();
             let num = get_random_number(256, &modulus);
             let inverse = modular_inverse(&num, &modulus);
-            assert_eq!((num * inverse).modpow(&one, &modulus), one);
+            assert_eq!((num * inverse).mod_floor(&modulus), One::one());
         }
     }
 
@@ -276,23 +271,18 @@ mod tests {
     #[test]
     /// The function tests the multiplication operation over finite field elements.
     fn test_finite_field_multiplication() {
-        let one = One::one();
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..NUM_TEST_RUNS {
             let element_1 = FiniteFieldElement::new_random(256, &modulus);
             let element_2 = FiniteFieldElement::new_random(256, &modulus);
             let product = element_1.value.clone() * element_2.value.clone();
-            assert_eq!(
-                (element_1 * element_2).value,
-                product.modpow(&one, &modulus)
-            );
+            assert_eq!((element_1 * element_2).value, product.mod_floor(&modulus));
         }
     }
 
     #[test]
     /// The function tests the division operation over finite field elements.
     fn test_finite_field_division() {
-        let one = One::one();
         let modulus = BigUint::from_slice(&MODULUS_ARRAY_256);
         for _i in 0..NUM_TEST_RUNS {
             let element_1 = FiniteFieldElement::new_random(256, &modulus);
@@ -301,7 +291,7 @@ mod tests {
             let term = (element_1.value.clone()
                 * element_2.value.clone()
                 * modular_inverse(&element_3.value, &modulus))
-            .modpow(&one, &modulus);
+            .mod_floor(&modulus);
             assert_eq!(
                 (element_1.clone() * element_2.clone() / element_3.clone()).value,
                 term
