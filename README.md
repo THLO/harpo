@@ -47,14 +47,13 @@ The generated seed phrase is written to standard output.
 In order to create secret-shared seed phrases, run the following command:
 
 ```
-harpo create --num-shares [N] --threshold [T] (--file [F] | --interactive)
+harpo create --num-shares [N] --threshold [T] (--file [F])
 ```
 
 The input is provided in one of two ways:
-* Using the `--file` (`-f`) option, providing the path `[F]` to the file
-containing the space-delimited seed phrase.
-* Using the `--interactive` (`-i`) flag, providing the seed phrase on the
-command line.
+* By default, the seed phrase is entered on the command line.
+* When using the `--file` (`-f`) option, the space-delimited seed phrase is
+read from the file at path `[F]`.
 
 For example, the content of the file or input provided interactively may be:
 
@@ -69,10 +68,13 @@ the execution will terminate with an error message.
 Apart from specifying the input source, two other parameters are required:
 
 * `--num-shares` (`-n`) `[N]`: The desired number `[N]` of secret-shared seed
-phrases must be provided.
+phrases must be provided. Note that the number of shares can be **at most** 16
+unless the option `--no-embedding` is used (see
+  [Additional Parameters](#additional-parameters)).
 * `--threshold` (`-t`) `[T]`: The desired threshold `[T]`, i.e., the minimum
 number of secret-shared seed phrases required to reconstruct the original
-seed phrase, must be provided.
+seed phrase, must be provided. The threshold must not exceed the number of
+shares.
 
 The created seed phrases are written to standard output.
 
@@ -85,10 +87,10 @@ harpo reconstruct (--file [F] | --interactive)
 ```
 
 Again, the input is provided in one of two ways:
-* Using the `--file` (`-f`) option, providing the path `[F]` to the file
-containing the space-delimited seed phrases, one seed phrase per line.
-* Using the `--interactive` (`-i`) flag, providing the seed phrases on the
-command line, one after the other.
+* By default, the seed phrases are entered on the command line, one after the
+other.
+* When using the `--file` (`-f`) option, the space-delimited seed phrases are
+read from the file at path `[F]`, one seed phrase per line.
 
 The reconstructed seed phrase is written to standard output.
 If at least `[T]` secret-shared seed phrases are provided, the output will
@@ -115,4 +117,5 @@ embedding can be turned off using this flag. In this case, the indices must be
 provided explicitly when using the `reconstruct` command. The format is
 `[INDEX]: [SEED PHRASE]`.
 
-All available parameters can be printed using the `--help` (`-h`) flag for each subcommand.
+All available parameters can be printed using the `--help` (`-h`) flag for
+each subcommand.
