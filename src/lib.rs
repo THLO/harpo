@@ -192,7 +192,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
     if (num_shares > MAX_EMBEDDED_SHARES) && embed_indices {
         return Err(HarpoError::InvalidParameter(format!(
             "Only {} secret-shared pass phrases can be created with embedded indices.\n\
-            Use a smaller number of shares or turn of index embedding ('--no-embedding').",
+            Use a smaller number of shares or turn off index embedding ('--no-embedding').",
             MAX_EMBEDDED_SHARES
         )));
     }
