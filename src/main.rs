@@ -3,7 +3,7 @@
 //!
 
 extern crate clap;
-use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{App, Arg, ArgMatches, SubCommand};
 use harpo::seed_phrase::SeedPhrase;
 use harpo::{
     create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
@@ -36,22 +36,10 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .long("file")
         .help("Uses the data in the provided file as input");
 
-    // The argument --interactive is used to specify input in the terminal.
-    let interactive_argument = Arg::with_name("interactive")
-        .short("i")
-        .long("interactive")
-        .help("Enters the input interactively");
-
-    // The input must be provided in a file or in the terminal.
-    let input_group = ArgGroup::with_name("file_interactive")
-        .args(&["file", "interactive"])
-        .required(true);
-
     // The create subcommand.
     let create_subcommand = SubCommand::with_name(CREATE_SUBCOMMAND)
         .about("Creates secret-shared seed phrases")
         .arg(file_argument.clone())
-        .arg(interactive_argument.clone())
         .arg(
             Arg::with_name("no-embedding") // The embedding of share indices can be turned off.
                 .short("N")
@@ -74,15 +62,11 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
                 .short("t")
                 .long("threshold")
                 .help("Sets the threshold to the given value"),
-        )
-        .group(input_group.clone());
-
+        );
     // The reconstruct subcommand.
     let reconstruct_subcommand = SubCommand::with_name(RECONSTRUCT_SUBCOMMAND)
         .about("Reconstructs a seed phrase")
-        .arg(file_argument)
-        .arg(interactive_argument)
-        .group(input_group);
+        .arg(file_argument);
 
     // The generate subcommand.
     let generate_subcommand = SubCommand::with_name(GENERATE_SUBCOMMAND)
@@ -347,10 +331,15 @@ fn handle_reconstruct(
         read_seed_phrases_interactively()?
     };
     if verbose {
-        println!(
-            "Reconstructing the seed phrase using these {} seed phrases:",
-            seed_phrases.len()
-        );
+        let length = seed_phrases.len();
+        if length > 1 {
+            println!(
+                "Reconstructing the seed phrase using these {} seed phrases:",
+                seed_phrases.len()
+            );
+        } else {
+            println!("Reconstructing the seed phrase using this seed phrase:")
+        }
         println!();
         for seed_phrase in &seed_phrases {
             println!("{}", seed_phrase);
