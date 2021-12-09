@@ -9,6 +9,7 @@ use harpo::{
     create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
     generate_seed_phrase, generate_seed_phrase_for_word_list, reconstruct_seed_phrase,
     reconstruct_seed_phrase_for_word_list, HarpoError, HarpoResult, SeedPhraseResult,
+    MAX_EMBEDDED_SHARES,
 };
 use std::fs::read_to_string;
 
@@ -202,6 +203,33 @@ fn handle_create(
         .value_of("threshold")
         .unwrap()
         .parse::<usize>()?;
+    let embed_indices = !command_line.is_present("no-embedding");
+    // Check early whether the parameters are valid.
+    if threshold < 1 {
+        return Err(HarpoError::InvalidParameter(
+            "The threshold must be at least 1.".to_string(),
+        ));
+    }
+    if threshold > num_shares {
+        return Err(HarpoError::InvalidParameter(
+            "The threshold cannot be larger than the number of shares.".to_string(),
+        ));
+    }
+    if num_shares > MAX_EMBEDDED_SHARES && embed_indices {
+        return Err(HarpoError::InvalidParameter(format!(
+            "Index embedding must be disabled (--no-embedding) when creating more than {} shares.",
+            MAX_EMBEDDED_SHARES
+        )));
+    }
+
+    if threshold > num_shares
+        || threshold < 1
+        || (num_shares > MAX_EMBEDDED_SHARES && embed_indices)
+    {
+        return Err(HarpoError::InvalidParameter(
+            "The provided parameters are invalid.".to_string(),
+        ));
+    }
     // Print verbose output if the flag --verbose is set.
     if verbose {
         println!(
@@ -221,7 +249,6 @@ fn handle_create(
         // The seed phrase must be entered interactively.
         read_seed_phrase_interactively()?
     };
-    let embed_indices = !command_line.is_present("no-embedding");
     if verbose {
         println!();
         println!(
@@ -261,7 +288,7 @@ fn read_seed_phrases_from_file(file_path: &str) -> HarpoResult<Vec<SeedPhrase>> 
     let seed_phrase_options: Vec<SeedPhraseResult> = file_content
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
-        .map(|line| convert_string_to_seed_phrase(line))
+        .map(convert_string_to_seed_phrase)
         .collect();
     // If there is a 'None' entry, return an error.
     if seed_phrase_options.iter().any(|option| option.is_err()) {
@@ -416,7 +443,7 @@ fn main() {
     match command_line.subcommand_name() {
         Some(CREATE_SUBCOMMAND) => {
             match handle_create(
-                &command_line
+                command_line
                     .subcommand_matches(CREATE_SUBCOMMAND)
                     .expect("The 'create' command must be specified."),
                 verbose,
@@ -438,7 +465,7 @@ fn main() {
         }
         Some(RECONSTRUCT_SUBCOMMAND) => {
             match handle_reconstruct(
-                &command_line
+                command_line
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
                     .expect("Error: The 'create' command must be specified."),
                 verbose,
@@ -458,7 +485,7 @@ fn main() {
         }
         Some(GENERATE_SUBCOMMAND) => {
             match handle_generate(
-                &command_line
+                command_line
                     .subcommand_matches(GENERATE_SUBCOMMAND)
                     .expect("Error: The 'generate' command must be specified."),
                 verbose,
