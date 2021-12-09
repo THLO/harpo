@@ -35,7 +35,7 @@ use seed_phrase::{
     get_seed_phrase_for_element, get_seed_phrase_for_element_with_embedding, is_compliant,
     SeedPhrase, NUM_BITS_FOR_INDEX,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use word_list::DEFAULT_WORD_LIST;
 
@@ -43,7 +43,7 @@ use word_list::DEFAULT_WORD_LIST;
 /// It is `2^NUM_BITS_FOR_INDEX = 16` because 4 bits are used to encode the index in the embedding.
 /// It is not easily possible to use more than 4 bits because only 4 additional bits are used
 /// when using a 12-word seed phrase (12*11 = 132 bits to encode a secret of 128 bits).
-const MAX_EMBEDDED_SHARES: usize = 1 << NUM_BITS_FOR_INDEX;
+pub const MAX_EMBEDDED_SHARES: usize = 1 << NUM_BITS_FOR_INDEX;
 
 /// Every word list must have exactly this number of words.
 const NUM_WORDS_IN_LIST: usize = 2048;
@@ -148,7 +148,7 @@ pub fn create_secret_shared_seed_phrases(
         threshold,
         num_seed_phrases,
         embed_indices,
-        &DEFAULT_WORD_LIST,
+        DEFAULT_WORD_LIST,
     )
 }
 
@@ -241,7 +241,7 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
 /// * `word_list` - The word list for the seed phrases.
 pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> SeedPhraseResult {
     // Reconstruct the seed phrase using the default word list.
-    reconstruct_seed_phrase_for_word_list(seed_phrases, &DEFAULT_WORD_LIST)
+    reconstruct_seed_phrase_for_word_list(seed_phrases, DEFAULT_WORD_LIST)
 }
 
 /// The function is called to reconstruct a seed phrase.
@@ -275,15 +275,13 @@ pub fn reconstruct_seed_phrase_for_word_list(
         ))
     } else {
         // Get the corresponding secret shares.
-        let mut secret_shares = vec![];
-        let mut indices = HashSet::new();
+        let mut secret_shares_map = HashMap::new();
         for seed_phrase in seed_phrases {
             let (element, index) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
-            if !indices.contains(&index) {
-                secret_shares.push(SecretShare::new(&element, index));
-                indices.insert(index);
-            }
+            // If there are multiple entries for the same index, keep the last one.
+            secret_shares_map.insert(index, SecretShare::new(&element, index));
         }
+        let secret_shares: Vec<SecretShare> = secret_shares_map.into_values().collect();
         // Reconstruct the secret element and turn it into a seed phrase.
         let secret_element = reconstruct_secret(&secret_shares);
         get_seed_phrase_for_element(&secret_element, word_list)
@@ -313,7 +311,7 @@ pub fn generate_seed_phrase_for_word_list(
 ///
 /// * `num_words` - The number of words in the seed phrase.
 pub fn generate_seed_phrase(num_words: usize) -> SeedPhraseResult {
-    generate_seed_phrase_for_word_list(num_words, &DEFAULT_WORD_LIST)
+    generate_seed_phrase_for_word_list(num_words, DEFAULT_WORD_LIST)
 }
 
 // ******************************** TESTS ********************************
