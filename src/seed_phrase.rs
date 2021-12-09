@@ -535,7 +535,7 @@ mod tests {
         // Create the corresponding finite field element.
         let element = FiniteFieldElement::new(&value, &modulus);
         // Get the seed phrase for the element.
-        let seed_phrase = get_seed_phrase_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+        let seed_phrase = get_seed_phrase_for_element(&element, DEFAULT_WORD_LIST).unwrap();
         let target_list: Vec<&str> = phrase.split(' ').collect();
         // Assert that the word list corresponds to the list in the test vector.
         assert_eq!(seed_phrase.get_words(), target_list);
@@ -544,7 +544,7 @@ mod tests {
             target_list.iter().map(|slice| slice.to_string()).collect();
         let derived_seed_phrase = SeedPhrase::new(&target_string_list);
         let derived_element =
-            get_element_for_seed_phrase(&derived_seed_phrase, &DEFAULT_WORD_LIST).unwrap();
+            get_element_for_seed_phrase(&derived_seed_phrase, DEFAULT_WORD_LIST).unwrap();
         // Assert that the derived element equals the decoded element.
         assert_eq!(derived_element, element);
     }
@@ -565,10 +565,10 @@ mod tests {
             let modulus = get_modulus_for_bits(size << 3).unwrap();
             let element = FiniteFieldElement::new(&random_key, &modulus);
             // Generate the seed phrase.
-            let seed_phrase = get_seed_phrase_for_element(&element, &DEFAULT_WORD_LIST).unwrap();
+            let seed_phrase = get_seed_phrase_for_element(&element, DEFAULT_WORD_LIST).unwrap();
             // Derive the element from the seed phrase.
             let derived_element =
-                get_element_for_seed_phrase(&seed_phrase, &DEFAULT_WORD_LIST).unwrap();
+                get_element_for_seed_phrase(&seed_phrase, DEFAULT_WORD_LIST).unwrap();
             // Assert that the derived element equals the original element.
             assert_eq!(element, derived_element);
         }
@@ -585,12 +585,12 @@ mod tests {
             let num_words = valid_num_words
                 .choose(&mut rng)
                 .expect("A valid random number of words should be chosen.");
-            let seed_phrase = get_random_seed_phrase(*num_words, &DEFAULT_WORD_LIST)
+            let seed_phrase = get_random_seed_phrase(*num_words, DEFAULT_WORD_LIST)
                 .expect("A valid seed phrase should be generated.");
             // Make sure that the number of words is correct.
             assert_eq!(seed_phrase.len(), *num_words);
             // Make sure it is BIP-0039-compliant.
-            assert!(is_compliant(&seed_phrase, &DEFAULT_WORD_LIST));
+            assert!(is_compliant(&seed_phrase, DEFAULT_WORD_LIST));
         }
     }
 
