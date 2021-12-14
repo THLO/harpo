@@ -70,7 +70,7 @@ impl Display for HarpoError {
             HarpoError::InvalidParameter(message) => {
                 write!(f, "Invalid parameter error: {}", message)
             }
-            HarpoError::IoError(error) => write!(f, "IO error: {}", error),
+            HarpoError::IoError(error) => write!(f, "I/O error: {}", error),
             HarpoError::ParseIntError(error) => write!(f, "Parsing error: {}", error),
         }
     }
@@ -270,22 +270,29 @@ pub fn reconstruct_seed_phrase_for_word_list(
         ));
     }
     if seed_phrases.iter().any(|code| code.len() != num_words) {
-        Err(HarpoError::InvalidSeedPhrase(
+        return Err(HarpoError::InvalidSeedPhrase(
             "Found seed phrases with different lengths.".to_string(),
-        ))
-    } else {
-        // Get the corresponding secret shares.
-        let mut secret_shares_map = HashMap::new();
-        for seed_phrase in seed_phrases {
-            let (element, index) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
-            // If there are multiple entries for the same index, keep the last one.
-            secret_shares_map.insert(index, SecretShare::new(&element, index));
-        }
-        let secret_shares: Vec<SecretShare> = secret_shares_map.into_values().collect();
-        // Reconstruct the secret element and turn it into a seed phrase.
-        let secret_element = reconstruct_secret(&secret_shares);
-        get_seed_phrase_for_element(&secret_element, word_list)
+        ));
     }
+    // Ensure that the seed phrases are BIP-0039-compliant if there is no embedding.
+    for seed_phrase in seed_phrases {
+        if seed_phrase.get_index().is_some() && !is_compliant(seed_phrase, word_list) {
+            return Err(HarpoError::InvalidSeedPhrase(
+                format!("Seed phrase is not BIP-0039-compliant: {}", seed_phrase),
+            ));
+        }
+    }
+    // Get the corresponding secret shares.
+    let mut secret_shares_map = HashMap::new();
+    for seed_phrase in seed_phrases {
+        let (element, index) = get_element_and_index_for_seed_phrase(seed_phrase, word_list)?;
+        // If there are multiple entries for the same index, keep the last one.
+        secret_shares_map.insert(index, SecretShare::new(&element, index));
+    }
+    let secret_shares: Vec<SecretShare> = secret_shares_map.into_values().collect();
+    // Reconstruct the secret element and turn it into a seed phrase.
+    let secret_element = reconstruct_secret(&secret_shares);
+    get_seed_phrase_for_element(&secret_element, word_list)
 }
 
 /// The function generates and returns a random seed phrase.
