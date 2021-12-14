@@ -237,8 +237,7 @@ fn get_index_list(seed_phrase: &SeedPhrase, word_list: &[&str]) -> HarpoResult<V
 /// * `seed_phrase` - The seed phrase.
 pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool {
     // The words are mapped to their indices in the word list.
-    let index_list_result = get_index_list(seed_phrase, word_list);
-    match index_list_result {
+    match get_index_list(seed_phrase, word_list) {
         Ok(index_list) => {
             let bytes = get_bytes_from_indices(&index_list);
             // The number of bytes used to build the element is a multiple of 32 bits = 4 bytes.

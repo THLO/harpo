@@ -145,8 +145,7 @@ impl SecretPolynomial {
     /// * `num_bits` - The security level in bits.
     ///  * `degree` - The degree of the constructed polynomial.
     pub(crate) fn new(secret: &FiniteFieldElement, num_bits: usize, degree: usize) -> Option<Self> {
-        let modulus_option = get_modulus_for_bits(num_bits);
-        match modulus_option {
+        match get_modulus_for_bits(num_bits) {
             Some(modulus) => {
                 let mut coefficients = vec![secret.clone()];
                 for _in in 1..=degree {
