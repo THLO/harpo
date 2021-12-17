@@ -8,7 +8,8 @@ use harpo::seed_phrase::SeedPhrase;
 use harpo::{
     create_secret_shared_seed_phrases, create_secret_shared_seed_phrases_for_word_list,
     generate_seed_phrase, generate_seed_phrase_for_word_list, reconstruct_seed_phrase,
-    reconstruct_seed_phrase_for_word_list, HarpoError, HarpoResult, SeedPhraseResult,
+    reconstruct_seed_phrase_for_word_list, validate_seed_phrase,
+    validate_seed_phrase_for_word_list, HarpoError, HarpoResult, SeedPhraseResult,
     MAX_EMBEDDED_SHARES,
 };
 use std::fs::read_to_string;
@@ -21,6 +22,9 @@ const RECONSTRUCT_SUBCOMMAND: &str = "reconstruct";
 
 /// The subcommand to generate a seed phrase.
 const GENERATE_SUBCOMMAND: &str = "generate";
+
+/// The subcommand to validate a seed phrase, i.e., check BIP-0039 compliance.
+const VALIDATE_SUBCOMMAND: &str = "validate";
 
 /// The function parses the command-line arguments.
 fn parse_command_line<'a>() -> ArgMatches<'a> {
@@ -67,7 +71,7 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
     // The reconstruct subcommand.
     let reconstruct_subcommand = SubCommand::with_name(RECONSTRUCT_SUBCOMMAND)
         .about("Reconstructs a seed phrase")
-        .arg(file_argument);
+        .arg(file_argument.clone());
 
     // The generate subcommand.
     let generate_subcommand = SubCommand::with_name(GENERATE_SUBCOMMAND)
@@ -80,6 +84,11 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
                 .long("length")
                 .help("Sets the number of words to the given value"),
         );
+
+    // The validate subcommand.
+    let validate_subcommand = SubCommand::with_name(VALIDATE_SUBCOMMAND)
+        .about("Validates a seed phrase")
+        .arg(file_argument);
 
     // The application including the top-level arguments.
     App::new("harpo")
@@ -103,13 +112,14 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .subcommand(create_subcommand) // Add the create subcommand.
         .subcommand(reconstruct_subcommand) // Add the reconstruct subcommand.
         .subcommand(generate_subcommand) // Add the generate subcommand.
+        .subcommand(validate_subcommand) // Add the validate subcommand.
         .get_matches()
 }
 
 /// The function converts the given string into a seed phrase.
 ///
 /// The function takes a space-delimited seed phrase in the form of a string (slice) as its
-/// argument and returns a [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if the string can
+/// argument and returns a seed phrase if the string can
 /// be split into sufficiently many words.
 /// Note that the function does not verify the validity of the provided words.
 ///
@@ -147,8 +157,8 @@ fn convert_string_to_seed_phrase(input: &str) -> SeedPhraseResult {
 
 /// The function reads a seed phrase from the given file.
 ///
-/// The function takes a file path argument and reads in a
-/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if possible.
+/// The function takes a file path argument and reads in a seed phrase
+/// if possible.
 ///
 /// * `file_path` - The path to the file containing the seed phrase.
 fn read_seed_phrase_from_file(file_path: &str) -> SeedPhraseResult {
@@ -171,7 +181,7 @@ fn read_seed_phrase_from_file(file_path: &str) -> SeedPhraseResult {
 /// The function reads a seed phrase from standard input.
 ///
 /// The function reads a line from standard input and returns it as a
-/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) if possible.
+/// seed phrase if possible.
 fn read_seed_phrase_interactively() -> SeedPhraseResult {
     let mut seed_phrase_string = String::new();
     println!("Please enter your seed phrase (12, 15, 18, 21, or 24 space-delimited words):");
@@ -184,10 +194,11 @@ fn read_seed_phrase_interactively() -> SeedPhraseResult {
 /// The function handles the creation of secret-shared seed phrases.
 ///
 /// The input to the function is the command-line arguments. If processing succeeds,
-/// the function returns a vector of [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) structs.
+/// the function returns the secret-shared seed phrases.
 ///
 /// * `command_line` - The command-line arguments.
 /// * `verbose` - Flag indicating if verbose output should be generated.
+/// * `word_list` - The word list to be used, if provided.
 fn handle_create(
     command_line: &clap::ArgMatches,
     verbose: bool,
@@ -277,8 +288,7 @@ fn handle_create(
 /// The function reads multiple seed phrases from a file.
 ///
 /// The function takes a file path argument and reads in all seed phrases.
-/// If processing succeeds, a vector of
-/// [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) is returned.
+/// If processing succeeds, the parsed seed phrases are returned.
 ///
 /// * `file_path` - The path to the file containing the seed phrases.
 fn read_seed_phrases_from_file(file_path: &str) -> HarpoResult<Vec<SeedPhrase>> {
@@ -306,8 +316,8 @@ fn read_seed_phrases_from_file(file_path: &str) -> HarpoResult<Vec<SeedPhrase>> 
 
 /// The function reads multiple seed phrases interactively.
 ///
-/// The function reads lines from standard input and returns all collected seed phrases in a
-/// vector of [SeedPhrase](./seed_phrase/struct.SeedPhrase.html) struct if possible.
+/// The function reads lines from standard input and, if processing succeeds, returns all
+/// collected seed phrases.
 fn read_seed_phrases_interactively() -> HarpoResult<Vec<SeedPhrase>> {
     let mut seed_phrases = vec![];
     let mut seed_phrase_string = String::new();
@@ -336,10 +346,11 @@ fn read_seed_phrases_interactively() -> HarpoResult<Vec<SeedPhrase>> {
 /// The function handles the reconstruction of a seed phrase.
 ///
 /// The input to the function is the command-line arguments. If processing succeeds,
-/// the function returns the reconstructed [SeedPhrase](./seed_phrase/struct.SeedPhrase.html).
+/// the function returns the reconstructed seed phrase.
 ///
 /// * `command_line` - The command-line arguments.
 /// * `verbose` - Flag indicating if verbose output should be generated.
+/// * `word_list` - The word list to be used, if provided.
 fn handle_reconstruct(
     command_line: &clap::ArgMatches,
     verbose: bool,
@@ -396,6 +407,13 @@ fn read_word_list_from_file(file_path: &str) -> HarpoResult<Vec<String>> {
     Ok(word_list)
 }
 
+/// The function handles the generation of a seed phrase.
+///
+/// The function generates a new seed phrase with the number of words provided on the command line.
+///
+/// * `command_line` - The command-line arguments.
+/// * `verbose` - Flag indicating if verbose output should be generated.
+/// * `word_list` - The word list to be used, if provided.
 fn handle_generate(
     command_line: &clap::ArgMatches,
     verbose: bool,
@@ -413,6 +431,44 @@ fn handle_generate(
             generate_seed_phrase_for_word_list(length, &slice_list)
         }
         None => generate_seed_phrase(length),
+    }
+}
+
+/// The function handles the validation of a seed phrase.
+///
+/// The input to the function is the command-line arguments.
+/// The function verifies BIP-0039 compliance of the given seed phrase.
+///
+/// * `command_line` - The command-line arguments.
+/// * `verbose` - Flag indicating if verbose output should be generated.
+/// * `word_list` - The word list to be used, if provided.
+fn handle_validate(
+    command_line: &clap::ArgMatches,
+    verbose: bool,
+    word_list: Option<Vec<String>>,
+) -> HarpoResult<()> {
+    // Read the input from a file or interactively.
+    let seed_phrase = if let Some(file_path) = command_line.value_of("file") {
+        // Print verbose output if the flag --verbose is set.
+        if verbose {
+            println!("Reading the seed phrase from {}...", file_path);
+        }
+        read_seed_phrase_from_file(file_path)?
+    } else {
+        // The seed phrases must be entered interactively.
+        read_seed_phrase_interactively()?
+    };
+    if verbose {
+        println!();
+        println!("Validating the seed phrase '{}'...", seed_phrase);
+    }
+    // Validate the seed phrase.
+    match word_list {
+        Some(list) => {
+            let slice_list: Vec<&str> = list.iter().map(|s| s.as_str()).collect();
+            validate_seed_phrase_for_word_list(&seed_phrase, &slice_list)
+        }
+        None => validate_seed_phrase(&seed_phrase),
     }
 }
 
@@ -467,7 +523,7 @@ fn main() {
             match handle_reconstruct(
                 command_line
                     .subcommand_matches(RECONSTRUCT_SUBCOMMAND)
-                    .expect("Error: The 'create' command must be specified."),
+                    .expect("Error: The 'reconstruct' command must be specified."),
                 verbose,
                 word_list,
             ) {
@@ -502,6 +558,24 @@ fn main() {
                     eprintln!("{}", err);
                 }
             };
+        }
+        Some(VALIDATE_SUBCOMMAND) => {
+            match handle_validate(
+                command_line
+                    .subcommand_matches(VALIDATE_SUBCOMMAND)
+                    .expect("Error: The 'validate' command must be specified."),
+                verbose,
+                word_list,
+            ) {
+                Ok(()) => {
+                    println!();
+                    println!("The seed phrase is valid.");
+                }
+                Err(_) => {
+                    println!();
+                    println!("The seed phrase is NOT valid!");
+                }
+            }
         }
         _ => eprintln!("Error: A subcommand must be provided. Use --help to view options."),
     };

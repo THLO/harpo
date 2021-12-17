@@ -5,8 +5,9 @@
 //!
 //! The main functions that `harpo` provides are:
 //! * [generate_seed_phrase](crate::generate_seed_phrase): Generate a random seed phrase.
+//! * [validate_seed_phrase](crate::validate_seed_phrase): Validate a given seed phrase.
 //! * [create_secret_shared_seed_phrases](crate::create_secret_shared_seed_phrases):
-//!   Given a seed phrase, create the requested number of
+//!   Given a valid seed phrase, create the requested number of
 //!   secret-shared seed phrases. A threshold must be provided as well, specifying how many
 //!   secret-shared seed phrases are required to reconstruct the original seed phrase.
 //! * [reconstruct_seed_phrase](crate::reconstruct_seed_phrase): Given a set of
@@ -62,16 +63,19 @@ pub enum HarpoError {
 }
 
 impl Display for HarpoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    /// The function defines how a [HarpoError](crate::HarpoError) is formatted.
+    ///
+    /// * `formatter` - The formatter.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HarpoError::InvalidSeedPhrase(message) => {
-                write!(f, "Invalid seed phrase error: {}", message)
+                write!(formatter, "Invalid seed phrase error: {}", message)
             }
             HarpoError::InvalidParameter(message) => {
-                write!(f, "Invalid parameter error: {}", message)
+                write!(formatter, "Invalid parameter error: {}", message)
             }
-            HarpoError::IoError(error) => write!(f, "I/O error: {}", error),
-            HarpoError::ParseIntError(error) => write!(f, "Parsing error: {}", error),
+            HarpoError::IoError(error) => write!(formatter, "I/O error: {}", error),
+            HarpoError::ParseIntError(error) => write!(formatter, "Parsing error: {}", error),
         }
     }
 }
@@ -80,7 +84,7 @@ impl From<std::io::Error> for HarpoError {
     /// The function defines how an [IO error](std::io::Error) is mapped to a
     /// [HarpoError](crate::HarpoError).
     ///
-    /// * `err` - The IO error.
+    /// * `err` - The I/O error.
     fn from(err: std::io::Error) -> Self {
         HarpoError::IoError(err)
     }
@@ -90,7 +94,7 @@ impl From<std::num::ParseIntError> for HarpoError {
     /// The function defines how a [parse int error](std::num::ParseIntError) is mapped to a
     /// [HarpoError](crate::HarpoError).
     ///
-    /// * `err` - The IO error.
+    /// * `err` - The parsing error.
     fn from(err: std::num::ParseIntError) -> Self {
         HarpoError::ParseIntError(err)
     }
@@ -107,6 +111,8 @@ pub type SeedPhraseResult = HarpoResult<SeedPhrase>;
 ///
 /// Specifically, it checks that the list contains exactly the required
 /// number of distinct words.
+///
+/// * `word_list` - The word list.
 fn validate_word_list(word_list: &[&str]) -> HarpoResult<()> {
     let mut word_set: HashSet<&str> = HashSet::new();
     for word in word_list {
@@ -238,7 +244,6 @@ pub fn create_secret_shared_seed_phrases_for_word_list(
 /// reconstructs the seed phrase that was originally used to generate the given seed phrases.
 ///
 /// * `seed_phrases` - The input seed phrases.
-/// * `word_list` - The word list for the seed phrases.
 pub fn reconstruct_seed_phrase(seed_phrases: &[SeedPhrase]) -> SeedPhraseResult {
     // Reconstruct the seed phrase using the default word list.
     reconstruct_seed_phrase_for_word_list(seed_phrases, DEFAULT_WORD_LIST)
@@ -277,9 +282,10 @@ pub fn reconstruct_seed_phrase_for_word_list(
     // Ensure that the seed phrases are BIP-0039-compliant if there is no embedding.
     for seed_phrase in seed_phrases {
         if seed_phrase.get_index().is_some() && !is_compliant(seed_phrase, word_list) {
-            return Err(HarpoError::InvalidSeedPhrase(
-                format!("Seed phrase is not BIP-0039-compliant: {}", seed_phrase),
-            ));
+            return Err(HarpoError::InvalidSeedPhrase(format!(
+                "Seed phrase is not BIP-0039-compliant: {}",
+                seed_phrase
+            )));
         }
     }
     // Get the corresponding secret shares.
@@ -319,6 +325,34 @@ pub fn generate_seed_phrase_for_word_list(
 /// * `num_words` - The number of words in the seed phrase.
 pub fn generate_seed_phrase(num_words: usize) -> SeedPhraseResult {
     generate_seed_phrase_for_word_list(num_words, DEFAULT_WORD_LIST)
+}
+
+/// The function validates a given seed phrase using the standard word list.
+///
+/// The function checks BIP-0039 compliance for the given seed phrase.
+///
+/// * `seed_phrase` - The given seed phrase.
+pub fn validate_seed_phrase(seed_phrase: &SeedPhrase) -> HarpoResult<()> {
+    validate_seed_phrase_for_word_list(seed_phrase, DEFAULT_WORD_LIST)
+}
+
+/// The function validates a given seed phrase.
+///
+/// The function checks BIP-0039 compliance for the given seed phrase.
+///
+/// * `seed_phrase` - The given seed phrase.
+/// * `word_list` - The word list to be used.
+pub fn validate_seed_phrase_for_word_list(
+    seed_phrase: &SeedPhrase,
+    word_list: &[&str],
+) -> HarpoResult<()> {
+    if is_compliant(seed_phrase, word_list) {
+        Ok(())
+    } else {
+        Err(HarpoError::InvalidSeedPhrase(
+            "The seed phrase is not BIP-0039-compliant.".to_string(),
+        ))
+    }
 }
 
 // ******************************** TESTS ********************************
@@ -462,5 +496,52 @@ mod tests {
             // Assert that the original and reconstructed seed phrases are not identical.
             assert_ne!(seed_phrase, reconstructed_seed_phrase);
         }
+    }
+
+    #[test]
+    /// The function tests the generation and validation of seed phrases.
+    fn test_seed_phrase_generation_validation() {
+        let valid_num_words: [usize; NUM_SEED_PHRASE_LENGTHS] = [12, 15, 18, 21, 24];
+        let mut rng = rand::thread_rng();
+        for _test in 0..NUM_TEST_RUNS {
+            // Choose a random number of words.
+            let num_words = valid_num_words
+                .choose(&mut rng)
+                .expect("A valid random number of words should be chosen.");
+            // Generate a seed phrase and validate it.
+            let seed_phrase = generate_seed_phrase(*num_words).expect("The generation should work");
+            assert!(validate_seed_phrase(&seed_phrase).is_ok());
+        }
+    }
+
+    #[test]
+    /// The function tests that invalid seed phrases indeed fail validation.
+    fn test_seed_phrase_validation_invalid_input() {
+        let words = [
+            "spacial", "race", "story", "silver", "cruel", "shield", "oil", "prevent", "gasp",
+            "airport", "ability", "master",
+        ];
+        let seed_phrase = SeedPhrase::new(&words.map(String::from));
+        assert!(validate_seed_phrase(&seed_phrase).is_err());
+
+        let words = [
+            "twist", "deliver", "cycle", "jewel", "gas", "ski", "endless", "submit",
+        ];
+        let seed_phrase = SeedPhrase::new(&words.map(String::from));
+        assert!(validate_seed_phrase(&seed_phrase).is_err());
+
+        let words = [
+            "level", "jupiter", "run", "review", "nature", "board", "excite", "gown", "young",
+            "town", "dish", "lemon",
+        ];
+        let seed_phrase = SeedPhrase::new(&words.map(String::from));
+        assert!(validate_seed_phrase(&seed_phrase).is_err());
+
+        let words = [
+            "fit", "author", "country", "slice", "exhibit", "indicate", "piano", "filter", "wave",
+            "square", "vital", "motor",
+        ];
+        let seed_phrase = SeedPhrase::new(&words.map(String::from));
+        assert!(validate_seed_phrase(&seed_phrase).is_err());
     }
 }
