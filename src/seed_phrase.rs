@@ -102,7 +102,9 @@ impl fmt::Display for SeedPhrase {
     /// A seed phrase is displayed as a space-delimited string.
     /// If it has an associated index, the index followed by a colon is prepended to the
     /// list of words.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    ///
+    /// * `formatter` - The formatter.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut words_with_spaces = String::new();
         // Create a space-delimited string of all words.
         for index in 0..(self.words.len() - 1) {
@@ -112,14 +114,16 @@ impl fmt::Display for SeedPhrase {
         words_with_spaces.push_str(&self.words[self.words.len() - 1]);
         // If there is an index, prepend it.
         match self.index {
-            Some(index) => write!(f, "{}: {}", index, words_with_spaces),
-            None => write!(f, "{}", words_with_spaces),
+            Some(index) => write!(formatter, "{}: {}", index, words_with_spaces),
+            None => write!(formatter, "{}", words_with_spaces),
         }
     }
 }
 
 impl PartialEq for SeedPhrase {
     /// Equality of two seed phrases is defined based on the words that make up the seed phrases.
+    ///
+    /// * `other` - The other seed phrase.
     fn eq(&self, other: &Self) -> bool {
         self.words == other.words
     }
@@ -229,12 +233,13 @@ fn get_index_list(seed_phrase: &SeedPhrase, word_list: &[&str]) -> HarpoResult<V
     Ok(index_list)
 }
 
-/// The function checks BIP-0039 compliance of the seed phrase.
+/// The function checks BIP-0039 compliance of the seed phrase for the given word list.
 ///
-/// The function checks whether the last word is the expected word according to the BIP-0039
-/// specification by examining the hash bits.
+/// For the given word list, the function checks whether the last word is the expected word
+/// according to the BIP-0039 specification by examining the hash bits.
 ///
 /// * `seed_phrase` - The seed phrase.
+/// * `word_list` - The word list.
 pub(crate) fn is_compliant(seed_phrase: &SeedPhrase, word_list: &[&str]) -> bool {
     // The words are mapped to their indices in the word list.
     match get_index_list(seed_phrase, word_list) {
@@ -348,7 +353,7 @@ fn get_bytes_from_indices(indices: &[usize]) -> Vec<u8> {
 /// This function is merely a convenience function, calling the function
 /// `get_seed_phrase_for_element_with_embedding` with `index = None` and `embed_index = false`.
 ///
-/// `number` - The finite field element.
+/// `element` - The finite field element.
 /// `word_list` - The word list.
 pub(crate) fn get_seed_phrase_for_element(
     element: &FiniteFieldElement,
@@ -363,7 +368,7 @@ pub(crate) fn get_seed_phrase_for_element(
 /// index (if any) and the information whether the index is supposed to be embedded.
 /// An error is returned if the index must be embedded but no index is provided.
 ///
-/// * `number` - The finite field element.
+/// * `element` - The finite field element.
 /// * `index` - The index of the finite field element.
 /// * `embed_index` - Flag indicating whether the index is to be embedded.
 /// * `word_list` - The word list.

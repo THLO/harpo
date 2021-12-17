@@ -1,7 +1,8 @@
 //! The `word_list` module provides the default word list.
 //!
 
-/// The default word list as specified here: <https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt>
+/// The default word list as specified here:
+/// <https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt>
 pub const DEFAULT_WORD_LIST: &[&str] = &[
     "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd",
     "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire",

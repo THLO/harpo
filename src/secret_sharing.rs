@@ -106,6 +106,9 @@ pub(crate) struct SecretShare {
 
 impl SecretShare {
     /// The function creates a secret share based on the provided finite field element and index.
+    ///
+    /// * `element` - The finite field element.
+    /// * `index` - The index.
     pub fn new(element: &FiniteFieldElement, index: u32) -> Self {
         SecretShare {
             index,
@@ -129,8 +132,10 @@ impl fmt::Display for SecretShare {
     ///
     /// A secret share is printed in brackets containing the index and the finite field element
     /// separated by a comma.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}, {}]", self.index, self.element.value)
+    ///
+    /// * `formatter` - The formatter.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "[{}, {}]", self.index, self.element.value)
     }
 }
 

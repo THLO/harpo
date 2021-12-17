@@ -203,6 +203,9 @@ impl Div for FiniteFieldElement {
 
     // This directive is required because division uses multiplication with the inverse element.
     #[allow(clippy::suspicious_arithmetic_impl)]
+    /// The function defines division for finite field elements.
+    ///
+    /// `other`- The other finite field element.
     fn div(self, other: Self) -> Self {
         // Get the modular inverse of the other element's value.
         // The modulus of "self" is used because the first term defines the modulus of the
