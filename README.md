@@ -50,7 +50,7 @@ A seed phrase can be validated, i.e. checked for
 following command:
 
 ```
-harpo validate (--file [F]))
+harpo validate (--file [F])
 ```
 
 The input is provided in one of two ways:
@@ -97,7 +97,7 @@ The created seed phrases are written to standard output.
 In order to reconstruct the original seed phrase, run the following command:
 
 ```
-harpo reconstruct (--file [F] | --interactive)
+harpo reconstruct (--file [F])
 ```
 
 Again, the input is provided in one of two ways:
