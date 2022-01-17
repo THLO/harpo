@@ -16,12 +16,22 @@ silence, secrecy, and confidentiality.
 
 While `harpo` is reasonably well tested, use it **at your own risk**.
 
-## Compilation
+## Installation
 
 Make sure that [Rust](https://www.rust-lang.org/tools/install) is installed.
 
-After cloning the repository and changing the directory to `harpo`, run the
-following command:
+The most recent version of `harpo` can be installed using `cargo` by running
+the following command:
+
+```
+cargo install harpo
+```
+
+## Compilation
+
+Instead of installing `harpo` directly using the command above, it is
+possible to compile it from the source code by cloning the repository,
+changing the directory to `harpo`, and then running the following command:
 
 ```
 cargo build --release
